@@ -1,0 +1,6 @@
+{
+  "name": "Registro de Ata de Reunião Acadêmica",
+  "description": "Sistema de registro descentralizado de atas acadêmicas com geração de hash criptográfico na blockchain e emissão de recibo digital inviolável.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
