@@ -11,7 +11,7 @@ import { Image as ImageIcon } from 'lucide-react';
  *    Exemplo: export const DEFAULT_LOGO_SRC = '/meu-logo.png';
  * =======================================================================
  */
-export const DEFAULT_LOGO_SRC = '/logo-placeholder.jpg';
+export const DEFAULT_LOGO_SRC = '/imagem_logo.png';
 
 interface LogoPlaceholderProps {
   className?: string;
