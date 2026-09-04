@@ -21,7 +21,13 @@ import {
   Cpu
 } from 'lucide-react';
 import { AcademicMeetingData, Participant, ActionItem, WalletState } from '../types';
-import { buildCanonicalMeetingString, calculateSha256, calculateKeccak256 } from '../utils/crypto';
+import { 
+  buildCanonicalMeetingString, 
+  calculateSha256, 
+  calculateKeccak256, 
+  sanitizeForHashing, 
+  concatenateMeetingData 
+} from '../utils/crypto';
 import { generateQrCodeDataUrl } from '../utils/qrCode';
 
 interface MeetingFormProps {
@@ -61,22 +67,33 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
   const [currentHashSha256, setCurrentHashSha256] = useState<string>('');
   const [currentHashKeccak, setCurrentHashKeccak] = useState<string>('');
   const [canonicalPreview, setCanonicalPreview] = useState<string>('');
+  const [sanitizedPreview, setSanitizedPreview] = useState<string>('');
+  const [inspectorTab, setInspectorTab] = useState<'sanitized' | 'json'>('sanitized');
   const [showInspector, setShowInspector] = useState<boolean>(false);
   const [hashAlgorithm, setHashAlgorithm] = useState<'Keccak-256' | 'SHA-256'>('Keccak-256');
   const [newActionLabel, setNewActionLabel] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [liveQrCodeUrl, setLiveQrCodeUrl] = useState<string>('');
 
-  // Recalcula a string canônica e os hashes sempre que o formulário é alterado
+  // Recalcula a string concatenada, aplica a sanitização obrigatória e gera os hashes
   useEffect(() => {
+    // 1. Concatena os campos estruturados da ata em uma string única linear
+    const rawConcatenated = concatenateMeetingData(formData);
+
+    // 2. OBRIGATÓRIO: Passa pela função sanitizeForHashing() (trim + regex /\s+/g + lowercase)
+    const cleanText = sanitizeForHashing(rawConcatenated);
+    setSanitizedPreview(cleanText);
+
+    // Também mantemos o payload JSON canônico para visualização estruturada
     const canonical = buildCanonicalMeetingString(formData);
     setCanonicalPreview(canonical);
 
-    calculateSha256(canonical).then(sha => {
+    // 3. Geração dos hashes a partir do texto sanitizado
+    calculateSha256(cleanText).then(sha => {
       setCurrentHashSha256(sha);
     });
 
-    const keccak = calculateKeccak256(canonical);
+    const keccak = calculateKeccak256(cleanText);
     setCurrentHashKeccak(keccak);
   }, [formData]);
 
@@ -254,7 +271,7 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
     }
 
     const chosenHash = hashAlgorithm === 'Keccak-256' ? currentHashKeccak : currentHashSha256;
-    await onSubmitMeeting(formData, chosenHash, canonicalPreview);
+    await onSubmitMeeting(formData, chosenHash, sanitizedPreview);
   };
 
   const selectedHash = hashAlgorithm === 'Keccak-256' ? currentHashKeccak : currentHashSha256;
@@ -721,23 +738,62 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
                 </span>
               </div>
 
-              {/* Inspecionar JSON canônico */}
+              {/* Inspecionar Dados Normalizados / Sanitizados */}
               <div className="pt-2 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setShowInspector(!showInspector)}
                   className="w-full py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-[#F2EDE4] flex items-center justify-between transition-colors cursor-pointer"
                 >
-                  <span className="text-[11px] uppercase tracking-wider text-[#8C8579]">Dados Canônicos Normalizados</span>
+                  <span className="text-[11px] uppercase tracking-wider text-[#8C8579]">Inspeção Pré-Hash (Sanitizado)</span>
                   <span className="text-emerald-400 font-semibold text-xs flex items-center gap-1">
                     {showInspector ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    {showInspector ? 'Ocultar JSON' : 'Inspecionar'}
+                    {showInspector ? 'Ocultar' : 'Inspecionar'}
                   </span>
                 </button>
                 {showInspector && (
-                  <pre className="mt-3 bg-black/40 p-3 rounded-lg border border-white/10 text-[10px] font-mono text-[#F2EDE4]/90 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight">
-                    {canonicalPreview}
-                  </pre>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-lg border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setInspectorTab('sanitized')}
+                        className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${
+                          inspectorTab === 'sanitized' 
+                            ? 'bg-[#4A6741] text-white shadow-xs' 
+                            : 'text-[#8C8579] hover:text-white'
+                        }`}
+                      >
+                        Texto Sanitizado
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInspectorTab('json')}
+                        className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${
+                          inspectorTab === 'json' 
+                            ? 'bg-[#4A6741] text-white shadow-xs' 
+                            : 'text-[#8C8579] hover:text-white'
+                        }`}
+                      >
+                        JSON Canônico
+                      </button>
+                    </div>
+
+                    {inspectorTab === 'sanitized' ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono">
+                          <CheckSquare className="w-3 h-3" />
+                          <span>Sanitizado: .trim() + regex /\s+/g + .toLowerCase()</span>
+                        </div>
+                        <pre className="bg-black/50 p-3 rounded-lg border border-white/10 text-[10px] font-mono text-[#F2EDE4]/90 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight break-all">
+                          {sanitizedPreview}
+                        </pre>
+                      </div>
+                    ) : (
+                      <pre className="bg-black/50 p-3 rounded-lg border border-white/10 text-[10px] font-mono text-[#F2EDE4]/90 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight">
+                        {canonicalPreview}
+                      </pre>
+                    )}
+                  </div>
                 )}
               </div>
 

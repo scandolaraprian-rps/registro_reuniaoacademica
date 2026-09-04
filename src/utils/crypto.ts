@@ -2,13 +2,85 @@ import { ethers } from 'ethers';
 import { AcademicMeetingData } from '../types';
 
 /**
- * Normaliza os dados da ata acadêmica em uma string canônica previsível e determinística.
- * A ordem das chaves e a remoção de espaços redundantes garante que a mesma ata
- * gere sempre exatamente o mesmo hash criptográfico.
+ * ==============================================================================
+ * FUNÇÃO UTILITÁRIA DE SANITIZAÇÃO E LIMPEZA DE TEXTO PARA HASHING
+ * ==============================================================================
+ * 
+ * Previne falsos positivos de adulteração durante a auditoria criptográfica
+ * decorrentes de diferenças invisíveis de formatação.
+ * 
+ * Passos executados:
+ * 1. .trim(): Remove espaços em branco no início e no final da string inteira.
+ * 2. .replace(/\s+/g, ' '): Utiliza expressão regular para substituir qualquer
+ *    sequência de múltiplos espaços, tabulações ou quebras de linha por um único
+ *    espaço simples.
+ * 3. .toLowerCase(): Padroniza todo o texto para letras minúsculas, garantindo
+ *    que variações de caixa alta/baixa não alterem o hash matemático.
+ * 
+ * @param rawText Texto bruto a ser limpo
+ * @returns Texto canônico sanitizado e pronto para hashing
+ */
+export function sanitizeForHashing(rawText: string): string {
+  if (typeof rawText !== 'string') return '';
+  return rawText
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+/**
+ * Concatena os campos capturados do formulário em uma string única e padronizada.
+ * A ordem dos campos e a ordenação alfabética de participantes e ações
+ * garantem que a mesma ata sempre resulte na mesma sequência textual.
+ * 
+ * @param data Dados estruturados da ata acadêmica
+ * @returns String unificada dos dados da ata
+ */
+export function concatenateMeetingData(data: AcademicMeetingData): string {
+  // Participantes ativos ordenados
+  const activeParticipants = (data.participants || [])
+    .filter(p => p.checked && p.name && p.name.trim().length > 0)
+    .map(p => `${p.role}: ${p.name.trim()}${p.departmentOrId?.trim() ? ` (${p.departmentOrId.trim()})` : ''}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join('; ');
+
+  // Ações da checklist ordenadas
+  const actions = (data.actionChecklist || [])
+    .map(a => `${a.label.trim()}${a.responsible ? ` [resp: ${a.responsible.trim()}]` : ''}${a.deadline ? ` [prazo: ${a.deadline.trim()}]` : ''}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join('; ');
+
+  // Concatenação linear dos campos da ata
+  return [
+    `título: ${data.title || ''}`,
+    `tipo: ${data.meetingType || ''}`,
+    `unidade: ${data.academicUnit || ''}`,
+    `data: ${data.dateTime || ''}`,
+    `participantes: ${activeParticipants}`,
+    `deliberações: ${data.summaryAndDecisions || ''}`,
+    `ações: ${actions}`,
+    `notas: ${data.extraNotes || ''}`
+  ].join(' | ');
+}
+
+/**
+ * Prepara o texto da ata acadêmica para a geração do hash:
+ * Concatena os dados do formulário e aplica obrigatoriamente a sanitização.
+ */
+export function prepareMeetingTextForHashing(data: AcademicMeetingData): {
+  rawConcatenated: string;
+  sanitizedText: string;
+} {
+  const rawConcatenated = concatenateMeetingData(data);
+  const sanitizedText = sanitizeForHashing(rawConcatenated);
+  return { rawConcatenated, sanitizedText };
+}
+
+/**
+ * Normaliza os dados da ata acadêmica em uma string canônica JSON previsível.
  */
 export function buildCanonicalMeetingString(data: AcademicMeetingData): string {
-  // Filtra apenas participantes marcados com nomes preenchidos
-  const activeParticipants = data.participants
+  const activeParticipants = (data.participants || [])
     .filter(p => p.checked && p.name.trim().length > 0)
     .map(p => ({
       role: p.role,
@@ -17,8 +89,7 @@ export function buildCanonicalMeetingString(data: AcademicMeetingData): string {
     }))
     .sort((a, b) => a.role.localeCompare(b.role) || a.name.localeCompare(b.name));
 
-  // Ações filtradas e padronizadas
-  const actions = data.actionChecklist
+  const actions = (data.actionChecklist || [])
     .map(a => ({
       item: a.label.trim(),
       checked: a.completed,
@@ -43,22 +114,32 @@ export function buildCanonicalMeetingString(data: AcademicMeetingData): string {
 }
 
 /**
- * Calcula o hash SHA-256 no formato bytes32 compatível com Solidity (0x...)
+ * Calcula o hash Keccak-256 (padrão EVM bytes32) usando ethers.js.
+ * Passa obrigatoriamente qualquer texto fornecido pela função sanitizeForHashing().
+ * 
+ * @param rawText Texto bruto da ata (concatenado ou colado pelo usuário)
+ * @returns Hash hexadecimal '0x...' de 32 bytes
  */
-export async function calculateSha256(canonicalString: string): Promise<string> {
+export function calculateKeccak256(rawText: string): string {
+  const cleanText = sanitizeForHashing(rawText);
+  return ethers.keccak256(ethers.toUtf8Bytes(cleanText));
+}
+
+/**
+ * Calcula o hash SHA-256 no formato bytes32 compatível com Solidity (0x...)
+ * Passa obrigatoriamente qualquer texto fornecido pela função sanitizeForHashing().
+ * 
+ * @param rawText Texto bruto da ata (concatenado ou colado pelo usuário)
+ * @returns Hash hexadecimal '0x...' de 32 bytes
+ */
+export async function calculateSha256(rawText: string): Promise<string> {
+  const cleanText = sanitizeForHashing(rawText);
   const encoder = new TextEncoder();
-  const data = encoder.encode(canonicalString);
+  const data = encoder.encode(cleanText);
   const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hexString = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   return `0x${hexString}`;
-}
-
-/**
- * Calcula o hash Keccak-256 nativo de Ethereum (bytes32) usando ethers.js
- */
-export function calculateKeccak256(canonicalString: string): string {
-  return ethers.keccak256(ethers.toUtf8Bytes(canonicalString));
 }
 
 /**
