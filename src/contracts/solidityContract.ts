@@ -92,6 +92,98 @@ contract RegistroAtaAcademica {
 }
 `;
 
+/**
+ * NOVO CONTRATO INTELIGENTE COM DISPONIBILIDADE DE DADOS VIA IPFS
+ * MUDANÇA DE ARQUITETURA:
+ * Em vez de armazenar apenas o bytes32 documentHash, o contrato agora persiste:
+ * 1. O Content Identifier (string ipfsCID) apontando para o arquivo criptografado no IPFS
+ * 2. O endereço do professor (orientador)
+ * 3. O endereço do aluno signatário
+ * 4. O timestamp do registro
+ */
+export const SOLIDITY_IPFS_CONTRACT = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+/**
+ * @title RegistroAtaIPFS
+ * @dev Contrato para registro de atas acadêmicas vinculando identidade e IPFS.
+ * Resolve o problema de disponibilidade de dados (risco de perda do texto original da ata)
+ * persistindo o identificador de conteúdo (CID) do arquivo criptografado no IPFS.
+ */
+contract RegistroAtaIPFS {
+
+    // Estrutura exigida com IPFS CID, professor, aluno e timestamp
+    struct Ata {
+        string ipfsCID;        // Identificador de Conteúdo do IPFS (ex: ipfs://Qm...)
+        address professor;     // Endereço da carteira do professor/orientador
+        address aluno;         // Endereço da carteira institucional do aluno
+        uint256 timestamp;     // Carimbo temporal imutável da blockchain (block.timestamp)
+    }
+
+    // Mapeamento: ipfsCID => Ata
+    mapping(string => Ata) public atasPorCID;
+
+    // Histórico ordenado de todos os CIDs registrados no contrato
+    string[] public historicoCIDs;
+
+    // Evento emitido quando a ata é registrada com seu identificador IPFS
+    event AtaRegistradaComIPFS(
+        string indexed ipfsCIDIndexed,
+        string ipfsCID,
+        address indexed professor,
+        address indexed aluno,
+        uint256 timestamp
+    );
+
+    /**
+     * @notice Registra uma nova ata acadêmica armazenada previamente no IPFS
+     * @param _ipfsCID O Content Identifier gerado no IPFS após criptografia local
+     * @param _aluno Endereço da carteira institucional do aluno signatário
+     */
+    function registrarAta(string calldata _ipfsCID, address _aluno) external returns (bool sucesso) {
+        require(bytes(_ipfsCID).length > 0, "CID do IPFS nao pode ser vazio");
+        require(_aluno != address(0), "Endereco do aluno invalido");
+        require(atasPorCID[_ipfsCID].timestamp == 0, "Ata ja registrada com este CID");
+
+        // msg.sender é o professor/orientador autenticado que submete a transação
+        atasPorCID[_ipfsCID] = Ata({
+            ipfsCID: _ipfsCID,
+            professor: msg.sender,
+            aluno: _aluno,
+            timestamp: block.timestamp
+        });
+
+        historicoCIDs.push(_ipfsCID);
+
+        emit AtaRegistradaComIPFS(_ipfsCID, _ipfsCID, msg.sender, _aluno, block.timestamp);
+        return true;
+    }
+
+    /**
+     * @notice Consulta e valida uma ata pelo seu identificador do IPFS
+     * @param _ipfsCID O CID do IPFS a ser consultado
+     */
+    function obterAta(string calldata _ipfsCID) external view returns (
+        string memory ipfsCID,
+        address professor,
+        address aluno,
+        uint256 timestamp
+    ) {
+        Ata memory a = atasPorCID[_ipfsCID];
+        require(a.timestamp > 0, "Ata nao encontrada com este CID");
+        return (a.ipfsCID, a.professor, a.aluno, a.timestamp);
+    }
+
+    /**
+     * @notice Retorna o total de atas registradas com IPFS no contrato
+     */
+    function totalAtas() external view returns (uint256) {
+        return historicoCIDs.length;
+    }
+}
+`;
+
+
 export const SMART_CONTRACT_ABI = [
   {
     "inputs": [],

@@ -16,7 +16,10 @@ import {
   FileText,
   Search,
   Share2,
-  RefreshCw
+  RefreshCw,
+  CloudUpload,
+  Database,
+  Key
 } from 'lucide-react';
 import { CryptoReceipt } from '../types';
 import { generateQrCodeDataUrl } from '../utils/qrCode';
@@ -252,6 +255,41 @@ export const CryptoReceiptModal: React.FC<CryptoReceiptModalProps> = ({
                 {receipt.txId}
               </div>
             </div>
+
+            {/* IPFS Content Identifier (CID) se gravado com suporte a disponibilidade de dados */}
+            {receipt.ipfsCID && (
+              <div className="p-4 rounded-xl border-2 border-[#4A6741]/30 bg-[#FAF9F6] space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-[#8C8579]">
+                  <span className="font-bold text-[#2D2A26] uppercase tracking-wider flex items-center gap-1.5">
+                    <CloudUpload className="w-3.5 h-3.5 text-[#4A6741]" />
+                    IPFS Content Identifier (CID - Disponibilidade de Dados)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => copyToClipboard(receipt.ipfsCID!, 'ipfsCID')}
+                      className="flex items-center gap-1 text-[11px] text-[#3C3833] hover:text-[#2D2A26] bg-white hover:bg-[#E5DFD3] px-2 py-0.5 rounded border border-[#DED8CD] cursor-pointer"
+                    >
+                      {copiedField === 'ipfsCID' ? <Check className="w-3 h-3 text-[#4A6741]" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'ipfsCID' ? 'Copiado!' : 'Copiar'}</span>
+                    </button>
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-100 text-[#4A6741] font-bold">
+                      IPFS Pinning Mock
+                    </span>
+                  </div>
+                </div>
+                <div className="font-mono text-xs sm:text-sm text-[#4A6741] break-all select-all font-bold">
+                  {receipt.ipfsCID}
+                </div>
+                <div className="text-[10px] text-[#8C8579] flex items-center justify-between pt-1">
+                  <span>Documento criptografado armazenado na rede descentralizada IPFS antes da confirmação do bloco.</span>
+                  {receipt.encryptionKeyHint && (
+                    <span className="font-mono text-[9px] text-[#3C3833] bg-white px-1.5 py-0.5 rounded border border-[#EBE6DD]">
+                      Chave: {receipt.encryptionKeyHint}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Grid com Bloco, Timestamp, Assinante e QR Code */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">

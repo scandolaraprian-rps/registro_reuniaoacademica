@@ -4,7 +4,8 @@ import {
   AcademicMeetingData, 
   CryptoReceipt, 
   WalletState, 
-  BlockchainNetwork 
+  BlockchainNetwork,
+  InstitutionalUser 
 } from './types';
 import { 
   SUPPORTED_NETWORKS, 
@@ -15,9 +16,14 @@ import {
   generateSimulatedTxHash, 
   formatEthAddress 
 } from './utils/crypto';
+import { 
+  LOCAL_STORAGE_USER_KEY,
+  generateMockWallet 
+} from './utils/auth';
 
 import { Navbar } from './components/Navbar';
 import { MeetingForm } from './components/MeetingForm';
+import { InstitutionalLoginGate } from './components/InstitutionalLoginGate';
 import { CryptoReceiptModal } from './components/CryptoReceiptModal';
 import { SmartContractViewer } from './components/SmartContractViewer';
 import { AuditVerifier } from './components/AuditVerifier';
@@ -28,14 +34,30 @@ const LOCAL_STORAGE_CONTRACT_KEY = 'academic_blockchain_custom_contract';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'form' | 'history' | 'audit' | 'contract'>('form');
+
+  // Estado da Identidade Institucional (SSO Acadêmico)
+  const [institutionalUser, setInstitutionalUser] = useState<InstitutionalUser | null>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null; // Inicia sem login para exibir o gate institucional
+  });
   
   // Wallet State
-  const [wallet, setWallet] = useState<WalletState>({
-    isConnected: true, // Começa conectado por padrão em modo testnet/simulação para experiência imediata
-    address: '0x71C59a38F8e684077674681f215E5c6778401aB7',
-    network: SUPPORTED_NETWORKS[0], // Sepolia
-    balance: '1.450',
-    isSimulated: true
+  const [wallet, setWallet] = useState<WalletState>(() => {
+    const initialAddress = institutionalUser?.walletAddress || '0x71C59a38F8e684077674681f215E5c6778401aB7';
+    return {
+      isConnected: true,
+      address: initialAddress,
+      network: SUPPORTED_NETWORKS[0], // Sepolia
+      balance: '1.450',
+      isSimulated: true
+    };
   });
 
   const [contractAddress, setContractAddress] = useState<string>(
@@ -207,11 +229,14 @@ export default function App() {
     localStorage.setItem(LOCAL_STORAGE_CONTRACT_KEY, newAddr);
   };
 
-  // Submissão da Ata: Cálculo do Hash e Gravação na Blockchain
+  // Submissão da Ata: Cálculo do Hash e Gravação na Blockchain com IPFS
   const handleSubmitMeeting = async (
     formData: AcademicMeetingData,
     chosenHash: string,
-    canonicalString: string
+    canonicalString: string,
+    ipfsCID?: string,
+    encryptedBase64?: string,
+    encryptionKeyHint?: string
   ) => {
     setIsSubmitting(true);
 
@@ -264,7 +289,10 @@ export default function App() {
         gasUsed: gasUsed,
         status: 'confirmed',
         canonicalDataString: canonicalString,
-        meetingSnapshot: formData
+        meetingSnapshot: formData,
+        ipfsCID: ipfsCID,
+        encryptedPayloadBase64: encryptedBase64,
+        encryptionKeyHint: encryptionKeyHint
       };
 
       // Adiciona aos recibos
@@ -291,6 +319,34 @@ export default function App() {
     setActiveTab('audit');
   };
 
+  // Handlers de Autenticação Institucional (SSO)
+  const handleInstitutionalLogin = (user: InstitutionalUser) => {
+    setInstitutionalUser(user);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+    } catch (e) {
+      console.error(e);
+    }
+    // Vincula automaticamente a carteira Web3 ao endereço derivado da identidade do usuário
+    setWallet(prev => ({
+      ...prev,
+      isConnected: true,
+      address: user.walletAddress,
+      isSimulated: true
+    }));
+  };
+
+  const handleLogoutInstitutional = () => {
+    setInstitutionalUser(null);
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    } catch (e) {
+      console.error(e);
+    }
+    // Retorna imediatamente à página inicial para informar outro e-mail e selecionar outro usuário
+    setActiveTab('form');
+  };
+
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#2D2A26] flex flex-col font-sans selection:bg-[#4A6741]/20 selection:text-[#2D2A26]">
       
@@ -304,17 +360,25 @@ export default function App() {
         onSwitchNetwork={handleSwitchNetwork}
         onToggleSimulatedWallet={handleToggleSimulatedWallet}
         receiptCount={receipts.length}
+        institutionalUser={institutionalUser}
+        onLogoutInstitutional={handleLogoutInstitutional}
       />
 
       {/* Main Content Area - padded for mobile bottom dock */}
       <main className="flex-1 pb-24 sm:pb-16">
         {activeTab === 'form' && (
-          <MeetingForm
-            wallet={wallet}
-            onConnectWallet={handleConnectWallet}
-            onSubmitMeeting={handleSubmitMeeting}
-            isSubmitting={isSubmitting}
-          />
+          !institutionalUser ? (
+            <InstitutionalLoginGate onLoginSuccess={handleInstitutionalLogin} />
+          ) : (
+            <MeetingForm
+              wallet={wallet}
+              onConnectWallet={handleConnectWallet}
+              onSubmitMeeting={handleSubmitMeeting}
+              isSubmitting={isSubmitting}
+              institutionalUser={institutionalUser}
+              onLogoutInstitutional={handleLogoutInstitutional}
+            />
+          )
         )}
 
         {activeTab === 'history' && (

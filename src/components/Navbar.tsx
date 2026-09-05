@@ -9,9 +9,11 @@ import {
   ExternalLink, 
   ChevronDown,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
-import { WalletState, BlockchainNetwork } from '../types';
+import { WalletState, BlockchainNetwork, InstitutionalUser } from '../types';
 import { SUPPORTED_NETWORKS } from '../contracts/solidityContract';
 import { formatEthAddress } from '../utils/crypto';
 import { LogoPlaceholder } from './LogoPlaceholder';
@@ -25,6 +27,8 @@ interface NavbarProps {
   onSwitchNetwork: (network: BlockchainNetwork) => void;
   onToggleSimulatedWallet: () => void;
   receiptCount: number;
+  institutionalUser?: InstitutionalUser | null;
+  onLogoutInstitutional?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,7 +39,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onDisconnectWallet,
   onSwitchNetwork,
   onToggleSimulatedWallet,
-  receiptCount
+  receiptCount,
+  institutionalUser,
+  onLogoutInstitutional
 }) => {
   const [networkDropdownOpen, setNetworkDropdownOpen] = useState(false);
   const [walletDropdownOpen, setWalletDropdownOpen] = useState(false);
@@ -128,6 +134,33 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Network Selector & Wallet Button */}
             <div className="flex items-center gap-1.5 sm:gap-3">
               
+              {/* Institutional User Chip & Dedicated Disconnect Button */}
+              {institutionalUser && (
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div 
+                    id="navbar-institutional-chip"
+                    className="hidden sm:flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-white border border-[#4A6741]/30 text-xs shadow-2xs"
+                    title={`Identidade Institucional: ${institutionalUser.email} (${institutionalUser.role})`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-[#4A6741] shrink-0"></span>
+                    <span className="text-[#2D2A26] font-semibold max-w-[90px] md:max-w-[130px] truncate">{institutionalUser.nome}</span>
+                    <span className="text-[10px] text-[#8C8579] font-mono hidden md:inline">({institutionalUser.role})</span>
+                  </div>
+
+                  {onLogoutInstitutional && (
+                    <button
+                      id="navbar-btn-logout-institutional"
+                      onClick={onLogoutInstitutional}
+                      className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full bg-white hover:bg-rose-50 border border-[#DED8CD] hover:border-rose-300 text-rose-700 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+                      title="Desconectar usuário atual e voltar à tela inicial para informar outro e-mail ou perfil"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>Desconectar</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Network Badge / Selector */}
               <div className="relative">
                 <button
@@ -218,6 +251,33 @@ export const Navbar: React.FC<NavbarProps> = ({
                           Desconectar Carteira
                         </button>
                       </div>
+
+                      {/* Identidade Institucional e Ação de Desconectar */}
+                      {institutionalUser && onLogoutInstitutional && (
+                        <div className="px-3 py-2 border-t border-[#F2EDE4] bg-[#FAF9F6]/80 rounded-b-lg mt-1">
+                          <div className="text-[10px] uppercase font-bold text-[#8C8579] tracking-wider mb-1 flex items-center gap-1">
+                            <UserCheck className="w-3 h-3 text-[#4A6741]" />
+                            Identidade Institucional
+                          </div>
+                          <div className="font-semibold text-[#2D2A26] text-[11px] truncate">
+                            {institutionalUser.nome} ({institutionalUser.role})
+                          </div>
+                          <div className="text-[10px] text-[#8C8579] font-mono truncate mb-2">
+                            {institutionalUser.email}
+                          </div>
+                          <button
+                            id="btn-dropdown-logout-institutional"
+                            onClick={() => {
+                              setWalletDropdownOpen(false);
+                              onLogoutInstitutional();
+                            }}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Desconectar e Trocar Usuário</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -301,6 +361,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Code2 className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] leading-tight">Contrato</span>
         </button>
+
+        {institutionalUser && onLogoutInstitutional && (
+          <button
+            id="mobile-nav-logout"
+            onClick={onLogoutInstitutional}
+            className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl min-w-[56px] min-h-[48px] text-rose-700 hover:bg-rose-50 transition-all cursor-pointer"
+            title="Desconectar e voltar à página inicial para informar outro e-mail"
+          >
+            <LogOut className="w-5 h-5 mb-0.5 text-rose-600" />
+            <span className="text-[10px] leading-tight font-medium">Sair</span>
+          </button>
+        )}
       </nav>
     </>
   );

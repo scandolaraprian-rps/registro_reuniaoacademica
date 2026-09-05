@@ -18,9 +18,16 @@ import {
   EyeOff,
   AlertCircle,
   HelpCircle,
-  Cpu
+  Cpu,
+  UserCheck,
+  LogOut,
+  Fingerprint,
+  CloudUpload,
+  Key,
+  Database,
+  LockKeyhole
 } from 'lucide-react';
-import { AcademicMeetingData, Participant, ActionItem, WalletState } from '../types';
+import { AcademicMeetingData, Participant, ActionItem, WalletState, InstitutionalUser } from '../types';
 import { 
   buildCanonicalMeetingString, 
   calculateSha256, 
@@ -29,19 +36,31 @@ import {
   concatenateMeetingData 
 } from '../utils/crypto';
 import { generateQrCodeDataUrl } from '../utils/qrCode';
+import { encryptDocument, uploadToIPFSMock } from '../utils/ipfs';
 
 interface MeetingFormProps {
   wallet: WalletState;
   onConnectWallet: () => void;
-  onSubmitMeeting: (formData: AcademicMeetingData, hash: string, canonicalString: string) => Promise<void>;
+  onSubmitMeeting: (
+    formData: AcademicMeetingData, 
+    hash: string, 
+    canonicalString: string,
+    ipfsCID?: string,
+    encryptedBase64?: string,
+    encryptionKeyHint?: string
+  ) => Promise<void>;
   isSubmitting: boolean;
+  institutionalUser?: InstitutionalUser | null;
+  onLogoutInstitutional?: () => void;
 }
 
 export const MeetingForm: React.FC<MeetingFormProps> = ({
   wallet,
   onConnectWallet,
   onSubmitMeeting,
-  isSubmitting
+  isSubmitting,
+  institutionalUser,
+  onLogoutInstitutional
 }) => {
   // Estado inicial do formulário
   const [formData, setFormData] = useState<AcademicMeetingData>({
@@ -68,12 +87,18 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
   const [currentHashKeccak, setCurrentHashKeccak] = useState<string>('');
   const [canonicalPreview, setCanonicalPreview] = useState<string>('');
   const [sanitizedPreview, setSanitizedPreview] = useState<string>('');
-  const [inspectorTab, setInspectorTab] = useState<'sanitized' | 'json'>('sanitized');
+  const [inspectorTab, setInspectorTab] = useState<'sanitized' | 'json' | 'encrypted'>('sanitized');
   const [showInspector, setShowInspector] = useState<boolean>(false);
   const [hashAlgorithm, setHashAlgorithm] = useState<'Keccak-256' | 'SHA-256'>('Keccak-256');
   const [newActionLabel, setNewActionLabel] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [liveQrCodeUrl, setLiveQrCodeUrl] = useState<string>('');
+
+  // Disponibilidade de Dados: Criptografia e Mock de IPFS
+  const [ipfsPassword, setIpfsPassword] = useState<string>('chave-academica-segura-2026');
+  const [encryptedBase64Preview, setEncryptedBase64Preview] = useState<string>('');
+  const [submissionStatusMessage, setSubmissionStatusMessage] = useState<string | null>(null);
+  const [lastGeneratedCID, setLastGeneratedCID] = useState<string | null>(null);
 
   // Recalcula a string concatenada, aplica a sanitização obrigatória e gera os hashes
   useEffect(() => {
@@ -83,6 +108,10 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
     // 2. OBRIGATÓRIO: Passa pela função sanitizeForHashing() (trim + regex /\s+/g + lowercase)
     const cleanText = sanitizeForHashing(rawConcatenated);
     setSanitizedPreview(cleanText);
+
+    // Gera o preview criptografado simulado (Base64)
+    const encrypted = encryptDocument(cleanText, ipfsPassword);
+    setEncryptedBase64Preview(encrypted);
 
     // Também mantemos o payload JSON canônico para visualização estruturada
     const canonical = buildCanonicalMeetingString(formData);
@@ -95,7 +124,7 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
 
     const keccak = calculateKeccak256(cleanText);
     setCurrentHashKeccak(keccak);
-  }, [formData]);
+  }, [formData, ipfsPassword]);
 
   // Gera o QR code dinâmico da prova de existência
   useEffect(() => {
@@ -248,7 +277,7 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
     }));
   };
 
-  // Submissão do formulário
+  // Submissão do formulário com Criptografia e Mock de IPFS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -271,7 +300,37 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
     }
 
     const chosenHash = hashAlgorithm === 'Keccak-256' ? currentHashKeccak : currentHashSha256;
-    await onSubmitMeeting(formData, chosenHash, sanitizedPreview);
+
+    try {
+      // (A) Criptografa os dados com a senha informada
+      setSubmissionStatusMessage('Criptografando texto da ata e gerando payload ofuscado (Base64)...');
+      const payloadCriptografado = encryptDocument(sanitizedPreview, ipfsPassword);
+
+      // (B) Upload simulado para a rede descentralizada IPFS
+      setSubmissionStatusMessage('Enviando documento criptografado para o IPFS (simulando nó IPFS)...');
+      const ipfsCID = await uploadToIPFSMock(payloadCriptografado);
+      setLastGeneratedCID(ipfsCID);
+
+      // (C) Exibe na tela a mensagem exigida com o CID retornado
+      setSubmissionStatusMessage(`Ata salva no IPFS! CID: ${ipfsCID} Preparando transação para a Blockchain...`);
+
+      // Breve pausa para garantir percepção e leitura visual clara do status
+      await new Promise(resolve => setTimeout(resolve, 1400));
+
+      // (D) Chama o handler de transação da blockchain gravando o CID
+      await onSubmitMeeting(
+        formData, 
+        chosenHash, 
+        sanitizedPreview, 
+        ipfsCID, 
+        payloadCriptografado, 
+        ipfsPassword
+      );
+    } catch (err: any) {
+      setFormError(`Erro durante o processamento da ata: ${err.message}`);
+    } finally {
+      setSubmissionStatusMessage(null);
+    }
   };
 
   const selectedHash = hashAlgorithm === 'Keccak-256' ? currentHashKeccak : currentHashSha256;
@@ -322,6 +381,52 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Identidade Institucional Comprovada (Exibição Obrigatória do Requisito) */}
+      {institutionalUser && (
+        <div 
+          id="institutional-identity-badge" 
+          className="mb-5 p-4 sm:p-5 rounded-2xl bg-white border-2 border-[#4A6741] text-[#2D2A26] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#4A6741] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+              <UserCheck className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm text-[#2D2A26] flex items-center gap-2 flex-wrap">
+                <span className="font-semibold">
+                  Logado como: <strong className="text-[#4A6741] font-bold">{institutionalUser.nome}</strong>
+                </span>
+                <span className="text-[#8C8579] font-mono text-xs hidden md:inline">
+                  ({institutionalUser.email})
+                </span>
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-[#4A6741]/10 text-[#4A6741] font-bold border border-[#4A6741]/20">
+                  {institutionalUser.role}
+                </span>
+              </div>
+              <div className="text-xs text-[#645e54] font-mono mt-1 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[#8C8579] font-sans text-xs">Carteira Vinculada:</span>
+                <span className="font-bold text-[#2D2A26] bg-[#FAF9F6] px-2 py-0.5 rounded-md border border-[#EBE6DD] select-all break-all">
+                  {institutionalUser.walletAddress}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {onLogoutInstitutional && (
+            <button
+              id="btn-logout-institutional"
+              type="button"
+              onClick={onLogoutInstitutional}
+              className="self-end sm:self-auto text-xs font-semibold px-3.5 py-2 rounded-xl border border-rose-200 hover:border-rose-400 text-rose-700 hover:text-rose-800 bg-rose-50/70 hover:bg-rose-100/80 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
+              title="Desconectar e retornar para a página inicial para informar outro e-mail e selecionar outro usuário"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-600" />
+              <span>Desconectar / Trocar Usuário</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Regra de Ouro da Blockchain Notice */}
       <div className="mb-5 sm:mb-6 p-3.5 sm:p-4 rounded-xl bg-[#F2EDE4]/70 border border-[#DED8CD] text-[#3C3833] text-xs sm:text-sm flex items-start gap-2.5 sm:gap-3 shadow-xs">
@@ -594,6 +699,90 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
               />
             </div>
 
+            {/* SEÇÃO 6: Disponibilidade de Dados & Armazenamento Descentralizado (IPFS Criptografado) */}
+            <div className="p-4 sm:p-5 rounded-xl border-2 border-[#4A6741]/30 bg-[#FAF9F6] space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-[#EBF1EA] text-[#4A6741] flex items-center justify-center font-bold">
+                    <CloudUpload className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-[#2D2A26] flex items-center gap-1.5">
+                      <span>Disponibilidade de Dados: IPFS Criptografado</span>
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-[#4A6741]/10 text-[#4A6741] font-semibold border border-[#4A6741]/20">
+                        Off-Chain Storage
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-[#8C8579]">
+                      Evita a perda do texto original pelo aluno. O texto é ofuscado/criptografado localmente e enviado ao IPFS. Apenas o CID é gravado na blockchain.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider font-bold text-[#2D2A26] mb-1.5 flex items-center gap-1">
+                    <Key className="w-3 h-3 text-[#4A6741]" />
+                    Senha de Criptografia da Ata
+                  </label>
+                  <input
+                    type="text"
+                    value={ipfsPassword}
+                    onChange={(e) => setIpfsPassword(e.target.value)}
+                    placeholder="Defina uma chave de proteção"
+                    className="w-full bg-white border border-[#DED8CD] rounded-lg px-3 py-2 text-xs font-mono text-[#2D2A26] focus:outline-none focus:ring-1 focus:ring-[#4A6741]"
+                  />
+                  <span className="text-[10px] text-[#8C8579]">Usada no front-end para ofuscar o payload antes do upload.</span>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider font-bold text-[#2D2A26] mb-1.5 flex items-center gap-1">
+                    <Database className="w-3 h-3 text-[#4A6741]" />
+                    Identificador de Conteúdo (CID Previsto)
+                  </label>
+                  <div className="w-full bg-white border border-[#DED8CD] rounded-lg px-3 py-2 text-xs font-mono text-[#4A6741] truncate bg-opacity-70">
+                    {lastGeneratedCID || 'ipfs://Qm...(gerado ao clicar em enviar)'}
+                  </div>
+                  <span className="text-[10px] text-[#8C8579]">Este CID será persistido na struct do Smart Contract.</span>
+                </div>
+              </div>
+
+              {/* Mini Preview do Base64 Ofuscado */}
+              <div className="pt-2 border-t border-[#EBE6DD]">
+                <div className="flex items-center justify-between text-[11px] text-[#8C8579] mb-1">
+                  <span className="flex items-center gap-1">
+                    <LockKeyhole className="w-3 h-3 text-[#4A6741]" />
+                    <span>Payload Criptografado Simulado (Base64 enviado ao IPFS):</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-[#4A6741] font-semibold">
+                    {encryptedBase64Preview.length} caracteres
+                  </span>
+                </div>
+                <div className="font-mono text-[10px] text-[#8C8579] bg-white p-2 rounded border border-[#EBE6DD] truncate select-all">
+                  {encryptedBase64Preview || 'Aguardando preenchimento do formulário...'}
+                </div>
+              </div>
+            </div>
+
+            {/* Banner de Feedback em Tempo Real da Submissão (Exigido pelo Requisito C) */}
+            {submissionStatusMessage && (
+              <div 
+                id="ipfs-submission-status-banner"
+                className="p-4 rounded-xl bg-emerald-50 border-2 border-[#4A6741] text-[#2D2A26] flex items-center gap-3 shadow-md animate-pulse"
+              >
+                <div className="w-5 h-5 border-2 border-[#4A6741] border-t-transparent rounded-full animate-spin shrink-0" />
+                <div className="space-y-0.5">
+                  <div className="text-[11px] uppercase font-bold text-[#4A6741] tracking-wider">
+                    Processo de Registro Híbrido (IPFS + Blockchain)
+                  </div>
+                  <div className="text-xs sm:text-sm font-semibold font-mono text-[#2D2A26]">
+                    {submissionStatusMessage}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Erros do formulário se houver */}
             {formError && (
               <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-center gap-2">
@@ -612,12 +801,12 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
               {isSubmitting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                  <span>Registrando Hash na Blockchain...</span>
+                  <span>{submissionStatusMessage || 'Processando envio e gravação...'}</span>
                 </>
               ) : (
                 <>
                   <Send className="w-5 h-5 shrink-0" />
-                  <span>ENVIAR ATA E GERAR RECIBO CRIPTOGRÁFICO</span>
+                  <span>ENVIAR ATA (CRIPTOGRAFAR, UPLOAD IPFS & REGISTRAR)</span>
                 </>
               )}
             </button>
@@ -718,8 +907,16 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
 
                 <div className="flex justify-between items-center">
                   <span className="text-[#8C8579]">Armazenamento:</span>
-                  <span className="font-mono text-emerald-300 font-semibold">bytes32 off-chain</span>
+                  <span className="font-mono text-emerald-300 font-semibold">IPFS (CID) + Hash EVM</span>
                 </div>
+                {lastGeneratedCID && (
+                  <div className="flex flex-col gap-1 pt-1 border-t border-white/5">
+                    <span className="text-[10px] text-[#8C8579]">Último CID Gravado:</span>
+                    <span className="font-mono text-[10px] text-emerald-300 break-all bg-black/40 p-1.5 rounded border border-white/10 select-all">
+                      {lastGeneratedCID}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* QR Code de Validação na Testnet Sepolia */}
@@ -738,14 +935,14 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
                 </span>
               </div>
 
-              {/* Inspecionar Dados Normalizados / Sanitizados */}
+              {/* Inspecionar Dados Normalizados / Sanitizados / Criptografados */}
               <div className="pt-2 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setShowInspector(!showInspector)}
                   className="w-full py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-[#F2EDE4] flex items-center justify-between transition-colors cursor-pointer"
                 >
-                  <span className="text-[11px] uppercase tracking-wider text-[#8C8579]">Inspeção Pré-Hash (Sanitizado)</span>
+                  <span className="text-[11px] uppercase tracking-wider text-[#8C8579]">Inspeção de Payloads</span>
                   <span className="text-emerald-400 font-semibold text-xs flex items-center gap-1">
                     {showInspector ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     {showInspector ? 'Ocultar' : 'Inspecionar'}
@@ -753,7 +950,7 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
                 </button>
                 {showInspector && (
                   <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-lg border border-white/10">
+                    <div className="flex items-center gap-1 p-1 bg-black/40 rounded-lg border border-white/10">
                       <button
                         type="button"
                         onClick={() => setInspectorTab('sanitized')}
@@ -763,7 +960,18 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
                             : 'text-[#8C8579] hover:text-white'
                         }`}
                       >
-                        Texto Sanitizado
+                        Sanitizado
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInspectorTab('encrypted')}
+                        className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${
+                          inspectorTab === 'encrypted' 
+                            ? 'bg-[#4A6741] text-white shadow-xs' 
+                            : 'text-[#8C8579] hover:text-white'
+                        }`}
+                      >
+                        IPFS (Base64)
                       </button>
                       <button
                         type="button"
@@ -786,6 +994,16 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
                         </div>
                         <pre className="bg-black/50 p-3 rounded-lg border border-white/10 text-[10px] font-mono text-[#F2EDE4]/90 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight break-all">
                           {sanitizedPreview}
+                        </pre>
+                      </div>
+                    ) : inspectorTab === 'encrypted' ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono">
+                          <LockKeyhole className="w-3 h-3" />
+                          <span>Payload Criptografado (Base64) pronto para IPFS</span>
+                        </div>
+                        <pre className="bg-black/50 p-3 rounded-lg border border-white/10 text-[10px] font-mono text-[#F2EDE4]/90 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight break-all">
+                          {encryptedBase64Preview}
                         </pre>
                       </div>
                     ) : (

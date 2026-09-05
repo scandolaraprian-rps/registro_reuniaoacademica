@@ -1,3 +1,14 @@
+export interface InstitutionalUser {
+  nome: string;
+  email: string;
+  role: 'aluno' | 'professor' | 'coordenador' | 'orientador';
+  matricula?: string;
+  instituicao?: string;
+  departamento?: string;
+  walletAddress: string;
+  loginTimestamp?: number;
+}
+
 export type MeetingType = 'Orientação' | 'Feedback' | 'Sincronização' | 'Banca / Defesa' | 'Reunião de Colegiado' | 'Outro';
 
 export interface Participant {
@@ -43,6 +54,9 @@ export interface CryptoReceipt {
   status: 'confirmed' | 'pending' | 'failed';
   canonicalDataString: string;
   meetingSnapshot: AcademicMeetingData;
+  ipfsCID?: string;
+  encryptedPayloadBase64?: string;
+  encryptionKeyHint?: string;
 }
 
 export interface BlockchainNetwork {
