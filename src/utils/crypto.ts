@@ -51,13 +51,17 @@ export function concatenateMeetingData(data: AcademicMeetingData): string {
     .join('; ');
 
   // Concatenação linear dos campos da ata
+  const pautaText = (data.pauta || '').trim();
+  const deliberacoesText = (data.deliberacoes || data.summaryAndDecisions || '').trim();
+
   return [
     `título: ${data.title || ''}`,
     `tipo: ${data.meetingType || ''}`,
     `unidade: ${data.academicUnit || ''}`,
     `data: ${data.dateTime || ''}`,
+    `pauta: ${pautaText}`,
+    `deliberações: ${deliberacoesText}`,
     `participantes: ${activeParticipants}`,
-    `deliberações: ${data.summaryAndDecisions || ''}`,
     `ações: ${actions}`,
     `notas: ${data.extraNotes || ''}`
   ].join(' | ');

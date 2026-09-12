@@ -30,6 +30,8 @@ export interface ActionItem {
 export interface AcademicMeetingData {
   dateTime: string;
   title: string;
+  pauta?: string; // Pauta da reunião (obrigatório para ata)
+  deliberacoes?: string; // Deliberações da reunião (obrigatório para ata)
   meetingType: MeetingType;
   academicUnit: string;
   participants: Participant[];

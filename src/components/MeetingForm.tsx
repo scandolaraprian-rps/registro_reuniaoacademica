@@ -37,6 +37,7 @@ import {
 } from '../utils/crypto';
 import { generateQrCodeDataUrl } from '../utils/qrCode';
 import { encryptDocument, uploadToIPFSMock } from '../utils/ipfs';
+import { travarInterface, inicializarEstadoDocumento } from '../utils/web3Lockdown';
 
 interface MeetingFormProps {
   wallet: WalletState;
@@ -66,6 +67,8 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
   const [formData, setFormData] = useState<AcademicMeetingData>({
     dateTime: new Date().toISOString().slice(0, 16),
     title: 'Orientação de TCC - Definição da Arquitetura do Sistema',
+    pauta: 'Definição da arquitetura técnica da aplicação, critérios de sanitização de dados para geração de hash imutável e modelo de persistência no IPFS.',
+    deliberacoes: 'Apresentação do estado da arte sobre autenticação Web3. Foi deliberado o uso de hashing off-chain (Keccak-256) acoplado a registro de prova de existência em smart contract EVM para conformidade com a LGPD e otimização de gás. Próxima entrega focará na modelagem do banco de dados e testes unitários.',
     meetingType: 'Orientação',
     academicUnit: 'Departamento de Ciência da Computação - DCC / UF',
     participants: [
@@ -137,6 +140,69 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
     }
   }, [currentHashKeccak, currentHashSha256, hashAlgorithm]);
 
+  // Manipuladores de eventos nativos addEventListener('input') vinculados aos campos de texto
+  // para atualizar os contadores visuais em tempo real conforme o usuário digita
+  useEffect(() => {
+    const pautaTextarea = document.getElementById('textarea-pauta') as HTMLTextAreaElement | null;
+    const contadorPauta = document.getElementById('contador-pauta');
+    const deliberacoesTextarea = document.getElementById('textarea-deliberacoes') as HTMLTextAreaElement | null;
+    const contadorDeliberacoes = document.getElementById('contador-deliberacoes');
+
+    const handlePautaInput = (e: Event) => {
+      const target = e.target as HTMLTextAreaElement;
+      if (contadorPauta) {
+        contadorPauta.textContent = `${target.value.length}/1000`;
+        if (target.value.length >= 950) {
+          contadorPauta.className = 'text-xs font-mono font-bold text-rose-600';
+        } else if (target.value.length >= 800) {
+          contadorPauta.className = 'text-xs font-mono font-semibold text-amber-600';
+        } else {
+          contadorPauta.className = 'text-xs font-mono text-[#8C8579]';
+        }
+      }
+    };
+
+    const handleDeliberacoesInput = (e: Event) => {
+      const target = e.target as HTMLTextAreaElement;
+      if (contadorDeliberacoes) {
+        contadorDeliberacoes.textContent = `${target.value.length}/1000`;
+        if (target.value.length >= 950) {
+          contadorDeliberacoes.className = 'text-xs font-mono font-bold text-rose-600';
+        } else if (target.value.length >= 800) {
+          contadorDeliberacoes.className = 'text-xs font-mono font-semibold text-amber-600';
+        } else {
+          contadorDeliberacoes.className = 'text-xs font-mono text-[#8C8579]';
+        }
+      }
+    };
+
+    if (pautaTextarea) {
+      pautaTextarea.addEventListener('input', handlePautaInput);
+    }
+    if (deliberacoesTextarea) {
+      deliberacoesTextarea.addEventListener('input', handleDeliberacoesInput);
+    }
+
+    return () => {
+      if (pautaTextarea) {
+        pautaTextarea.removeEventListener('input', handlePautaInput);
+      }
+      if (deliberacoesTextarea) {
+        deliberacoesTextarea.removeEventListener('input', handleDeliberacoesInput);
+      }
+    };
+  }, []);
+
+  // REQUISITO 2: Consulta de Estado On-Chain disparada no carregamento (window.onload / mount)
+  useEffect(() => {
+    const targetHash = hashAlgorithm === 'Keccak-256' ? currentHashKeccak : currentHashSha256;
+    if (targetHash) {
+      inicializarEstadoDocumento(targetHash, undefined, formData).catch(err => {
+        console.warn('[Web3 Initializer] Consulta inicial on-chain falhou ou pendente:', err);
+      });
+    }
+  }, []);
+
   // Carrega exemplo acadêmico alternativo
   const loadExample = (type: 'orientacao' | 'feedback' | 'banca') => {
     if (type === 'orientacao') {
@@ -149,6 +215,8 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
           { id: '1', role: 'Aluno', name: 'Ana Beatriz Souza', departmentOrId: 'Matrícula: 202210103', checked: true },
           { id: '2', role: 'Professor', name: 'Prof. Dr. Roberto Albuquerque', departmentOrId: 'SIAPE: 334109', checked: true }
         ],
+        pauta: 'Alinhamento dos objetivos específicos do trabalho de conclusão de curso e definição de escopo para prova de conceito.',
+        deliberacoes: 'Alinhamento dos objetivos específicos do trabalho de conclusão de curso. Decidido adotar arquitetura de microsserviços e validação via smart contract em testnet pública.',
         summaryAndDecisions: 'Alinhamento dos objetivos específicos do trabalho de conclusão de curso. Decidido adotar arquitetura de microsserviços e validação via smart contract em testnet pública.',
         actionChecklist: [
           { id: 'a1', label: 'Aprovar plano de trabalho preliminar', completed: true, responsible: 'Professor' },
@@ -168,6 +236,8 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
           { id: '1', role: 'Aluno', name: 'Carlos Eduardo Mendes', departmentOrId: 'Matrícula: 202020941', checked: true },
           { id: '2', role: 'Professor', name: 'Profa. Me. Camila Fontes', departmentOrId: 'SIAPE: 981120', checked: true }
         ],
+        pauta: 'Análise dos relatórios quinzenais de estágio, produtividade do aluno e adequação às normas de segurança da informação.',
+        deliberacoes: 'Avaliação dos relatórios de progresso quinzenais do estágio. Desempenho satisfatório nas entregas de backlog. Recomenda-se maior aprofundamento na análise de segurança de dados.',
         summaryAndDecisions: 'Avaliação dos relatórios de progresso quinzenais do estágio. Desempenho satisfatório nas entregas de backlog. Recomenda-se maior aprofundamento na análise de segurança de dados.',
         actionChecklist: [
           { id: 'a1', label: 'Aprovar relatório de atividades do estágio', completed: true, responsible: 'Orientador' },
@@ -186,6 +256,8 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
           { id: '1', role: 'Aluno', name: 'Juliana Vieira Lima', departmentOrId: 'Matrícula: 202409001', checked: true },
           { id: '2', role: 'Professor', name: 'Prof. Dr. Henrique Vasconcelos', departmentOrId: 'Orientador - SIAPE: 441092', checked: true }
         ],
+        pauta: 'Revisão dos capítulos 1 e 2 da dissertação de mestrado e validação de cronograma para qualificação oficial.',
+        deliberacoes: 'Revisão dos capítulos 1 e 2 da dissertação. O comitê de orientação aprovou o direcionamento dos experimentos computacionais. A data prevista para defesa da qualificação foi fixada.',
         summaryAndDecisions: 'Revisão dos capítulos 1 e 2 da dissertação. O comitê de orientação aprovou o direcionamento dos experimentos computacionais. A data prevista para defesa da qualificação foi fixada.',
         actionChecklist: [
           { id: 'a1', label: 'Aprovar plano de trabalho preliminar', completed: true, responsible: 'Comitê' },
@@ -282,22 +354,62 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
     e.preventDefault();
     setFormError(null);
 
-    // Validação básica
-    if (!formData.title.trim()) {
-      setFormError('Por favor, informe o Título da Reunião.');
-      return;
+    // =========================================================================
+    // ETAPA 1: VALIDAÇÃO DE ENTRADAS, SANITIZAÇÃO (.trim()) & CLÁUSULAS DE GUARDA
+    // =========================================================================
+    
+    // Validação prévia de Título
+    const tituloSanitizado = (formData.title || '').trim();
+    if (!tituloSanitizado) {
+      const msg = 'Erro de Validação: O campo "Título da Reunião" é obrigatório e não pode conter apenas espaços.';
+      setFormError(msg);
+      throw new Error(msg);
     }
 
+    // Validação de Participantes
     const activeParticipants = formData.participants.filter(p => p.checked && p.name.trim().length > 0);
     if (activeParticipants.length === 0) {
-      setFormError('Selecione e informe o nome de pelo menos um participante (Aluno ou Professor).');
-      return;
+      const msg = 'Erro de Validação: Selecione e informe o nome de pelo menos um participante (Aluno ou Professor).';
+      setFormError(msg);
+      throw new Error(msg);
     }
 
-    if (!formData.summaryAndDecisions.trim()) {
-      setFormError('Por favor, descreva o Resumo e as Decisões da reunião.');
-      return;
+    // (A) Captura e sanitização obrigatória com .trim() para eliminar espaços e quebras de linha nas extremidades
+    const campoPautaSanitizado = (formData.pauta ?? '').trim();
+    const campoDeliberacoesSanitizado = (formData.deliberacoes ?? formData.summaryAndDecisions ?? '').trim();
+
+    // (B) Cláusula de guarda rigorosa para o campo "Pauta"
+    if (campoPautaSanitizado.length === 0 || campoPautaSanitizado.length > 1000) {
+      const mensagemErroPauta = campoPautaSanitizado.length === 0
+        ? 'Erro de Validação: O campo "Pauta" não pode ser vazio ou conter apenas espaços em branco.'
+        : `Erro de Validação: O campo "Pauta" excedeu o limite estabelecido de 1000 caracteres (comprimento atual: ${campoPautaSanitizado.length}).`;
+      
+      // Exibe feedback visual de erro para o usuário diretamente na interface (não apenas console)
+      setFormError(mensagemErroPauta);
+      // Dispara a exceção obrigatória e aborta imediatamente o processo de hash criptográfico
+      throw new Error(mensagemErroPauta);
     }
+
+    // (C) Cláusula de guarda rigorosa para o campo "Deliberações"
+    if (campoDeliberacoesSanitizado.length === 0 || campoDeliberacoesSanitizado.length > 1000) {
+      const mensagemErroDeliberacoes = campoDeliberacoesSanitizado.length === 0
+        ? 'Erro de Validação: O campo "Deliberações" não pode ser vazio ou conter apenas espaços em branco.'
+        : `Erro de Validação: O campo "Deliberações" excedeu o limite estabelecido de 1000 caracteres (comprimento atual: ${campoDeliberacoesSanitizado.length}).`;
+      
+      // Exibe feedback visual de erro para o usuário diretamente na interface
+      setFormError(mensagemErroDeliberacoes);
+      // Dispara a exceção obrigatória e aborta imediatamente o processo de hash criptográfico
+      throw new Error(mensagemErroDeliberacoes);
+    }
+
+    // Atualiza os campos do formulário com os valores rigorosamente sanitizados
+    const dadosNormalizados: AcademicMeetingData = {
+      ...formData,
+      title: tituloSanitizado,
+      pauta: campoPautaSanitizado,
+      deliberacoes: campoDeliberacoesSanitizado,
+      summaryAndDecisions: campoDeliberacoesSanitizado
+    };
 
     const chosenHash = hashAlgorithm === 'Keccak-256' ? currentHashKeccak : currentHashSha256;
 
@@ -319,13 +431,18 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
 
       // (D) Chama o handler de transação da blockchain gravando o CID
       await onSubmitMeeting(
-        formData, 
+        dadosNormalizados, 
         chosenHash, 
         sanitizedPreview, 
         ipfsCID, 
         payloadCriptografado, 
         ipfsPassword
       );
+
+      // (E) REQUISITO 1: Após aprovação e confirmação na blockchain, invoca o travamento cirúrgico do DOM
+      setTimeout(() => {
+        travarInterface(dadosNormalizados);
+      }, 400);
     } catch (err: any) {
       setFormError(`Erro durante o processamento da ata: ${err.message}`);
     } finally {
@@ -450,15 +567,45 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
         
         {/* Left Section: Main Form */}
         <section className="w-full lg:w-3/5 flex flex-col gap-6">
-          <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-4 sm:p-8 border border-[#EBE6DD] shadow-sm flex flex-col gap-5 sm:gap-6">
+          <form id="meeting-form" onSubmit={handleSubmit} className="bg-white rounded-2xl p-4 sm:p-8 border border-[#EBE6DD] shadow-sm flex flex-col gap-5 sm:gap-6">
             
-            <div className="flex items-center justify-between border-b border-[#F2EDE4] pb-3">
-              <h2 className="text-lg font-serif italic text-[#4A6741]">
-                Formulário de Registro
-              </h2>
-              <span className="text-[11px] uppercase tracking-wider text-[#8C8579] font-mono">
-                Padrão: <strong className="text-[#4A6741]">{hashAlgorithm}</strong>
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#F2EDE4] pb-3 gap-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-serif italic text-[#4A6741]">
+                  Formulário de Registro
+                </h2>
+                <span className="text-[11px] uppercase tracking-wider text-[#8C8579] font-mono">
+                  ({hashAlgorithm})
+                </span>
+              </div>
+              
+              {/* Gatilhos de Auditoria Web3 / Travamento de Interface */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  id="btn-verificar-onchain"
+                  onClick={() => {
+                    const targetHash = hashAlgorithm === 'Keccak-256' ? currentHashKeccak : currentHashSha256;
+                    inicializarEstadoDocumento(targetHash, undefined, formData);
+                  }}
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-[#FAF9F6] hover:bg-[#F2EDE4] text-[#4A6741] border border-[#DED8CD] transition-colors cursor-pointer flex items-center gap-1"
+                  title="Consulta o estado da ata diretamente do contrato inteligente na blockchain"
+                >
+                  <Cpu className="w-3 h-3 text-[#4A6741]" />
+                  <span>Consultar On-Chain</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-travar-interface-manual"
+                  onClick={() => travarInterface(formData)}
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-colors cursor-pointer flex items-center gap-1"
+                  title="Simula a homologação do contrato e executa a remoção cirúrgica de todos os nós <input> e <textarea> do DOM"
+                >
+                  <LockKeyhole className="w-3 h-3 text-emerald-700" />
+                  <span>Travar Interface (Aprovada)</span>
+                </button>
+              </div>
             </div>
 
             {/* SEÇÃO 1: Identificação Básica */}
@@ -582,28 +729,83 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
               </div>
             </div>
 
-            {/* SEÇÃO 3: Resumo e Decisões */}
+            {/* SEÇÃO 3: Pauta da Reunião */}
             <div className="flex flex-col">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs uppercase tracking-widest font-bold text-[#8C8579]">
-                  Resumo e Decisões *
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="textarea-pauta" className="block text-xs uppercase tracking-widest font-bold text-[#8C8579]">
+                  Pauta da Reunião *
                 </label>
-                <span className="text-[11px] text-[#8C8579]">
-                  {formData.summaryAndDecisions.length} caracteres
+                <span className="text-[10px] uppercase font-mono text-[#8C8579]">
+                  Limite: 1000 caracteres
                 </span>
               </div>
               <textarea
-                id="textarea-summary"
-                rows={4}
-                value={formData.summaryAndDecisions}
-                onChange={(e) => setFormData({ ...formData, summaryAndDecisions: e.target.value })}
-                placeholder="Definição do cronograma de coleta de dados para o capítulo 3. Ajuste na metodologia qualitativa conforme sugestão do orientador."
-                className="w-full bg-[#FDFCFB] border border-[#DED8CD] rounded-lg px-4 py-3 text-sm text-[#2D2A26] leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-[#4A6741]"
+                id="textarea-pauta"
+                name="pauta"
+                rows={3}
                 required
+                maxLength={1000}
+                value={formData.pauta || ''}
+                onChange={(e) => setFormData({ ...formData, pauta: e.target.value })}
+                placeholder="Informe a pauta oficial, tópicos ou ordem do dia da reunião..."
+                className="w-full bg-[#FDFCFB] border border-[#DED8CD] rounded-lg px-4 py-3 text-sm text-[#2D2A26] leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-[#4A6741]"
               />
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-[10px] text-[#8C8579]">
+                  Obrigatório para geração do hash criptográfico
+                </span>
+                <small 
+                  id="contador-pauta" 
+                  className={`text-xs font-mono font-semibold transition-colors ${
+                    (formData.pauta || '').length >= 950 ? 'text-rose-600 font-bold' : (formData.pauta || '').length >= 800 ? 'text-amber-600' : 'text-[#8C8579]'
+                  }`}
+                >
+                  {(formData.pauta || '').length}/1000
+                </small>
+              </div>
             </div>
 
-            {/* SEÇÃO 4: Checklist de Ações */}
+            {/* SEÇÃO 4: Deliberações e Decisões */}
+            <div className="flex flex-col">
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="textarea-deliberacoes" className="block text-xs uppercase tracking-widest font-bold text-[#8C8579]">
+                  Deliberações e Decisões *
+                </label>
+                <span className="text-[10px] uppercase font-mono text-[#8C8579]">
+                  Limite: 1000 caracteres
+                </span>
+              </div>
+              <textarea
+                id="textarea-deliberacoes"
+                name="deliberacoes"
+                rows={4}
+                required
+                maxLength={1000}
+                value={formData.deliberacoes ?? formData.summaryAndDecisions}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  deliberacoes: e.target.value,
+                  summaryAndDecisions: e.target.value
+                })}
+                placeholder="Descreva as deliberações, decisões tomadas, encaminhamentos e aprovações regimentais..."
+                className="w-full bg-[#FDFCFB] border border-[#DED8CD] rounded-lg px-4 py-3 text-sm text-[#2D2A26] leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-[#4A6741]"
+              />
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-[10px] text-[#8C8579]">
+                  Obrigatório para geração do hash criptográfico
+                </span>
+                <small 
+                  id="contador-deliberacoes" 
+                  className={`text-xs font-mono font-semibold transition-colors ${
+                    (formData.deliberacoes ?? formData.summaryAndDecisions ?? '').length >= 950 ? 'text-rose-600 font-bold' : (formData.deliberacoes ?? formData.summaryAndDecisions ?? '').length >= 800 ? 'text-amber-600' : 'text-[#8C8579]'
+                  }`}
+                >
+                  {(formData.deliberacoes ?? formData.summaryAndDecisions ?? '').length}/1000
+                </small>
+              </div>
+            </div>
+
+            {/* SEÇÃO 5: Checklist de Ações */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <label className="block text-xs uppercase tracking-widest font-bold text-[#8C8579]">

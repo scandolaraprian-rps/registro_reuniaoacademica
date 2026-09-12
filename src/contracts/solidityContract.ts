@@ -84,6 +84,26 @@ contract RegistroAtaAcademica {
     }
 
     /**
+     * @notice Retorna o estado canônico da ata para controle de imutabilidade no DOM
+     * @dev Permite que o front-end consulte a blockchain como única fonte da verdade
+     * @param _documentHash Hash criptográfico da ata
+     * @return estado Retorna "Aprovada", "Pendente" ou "Inexistente"
+     * @return assinante Endereço da carteira que assinou o registro
+     * @return timestamp Carimbo de tempo do registro
+     */
+    function obterEstadoAta(bytes32 _documentHash) external view returns (
+        string memory estado,
+        address assinante,
+        uint256 timestamp
+    ) {
+        RegistroAta memory r = registros[_documentHash];
+        if (r.timestamp != 0) {
+            return ("Aprovada", r.assinante, r.timestamp);
+        }
+        return ("Inexistente", address(0), 0);
+    }
+
+    /**
      * @notice Retorna a quantidade total de atas registradas no contrato
      */
     function totalAtasRegistradas() external view returns (uint256) {
@@ -268,6 +288,35 @@ export const SMART_CONTRACT_ABI = [
       {
         "internalType": "uint256",
         "name": "blockNumber",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "_documentHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "obterEstadoAta",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "estado",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "assinante",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
         "type": "uint256"
       }
     ],
