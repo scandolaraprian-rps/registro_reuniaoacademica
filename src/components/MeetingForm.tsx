@@ -38,6 +38,9 @@ import {
 import { generateQrCodeDataUrl } from '../utils/qrCode';
 import { encryptDocument, uploadToIPFSMock } from '../utils/ipfs';
 import { travarInterface, inicializarEstadoDocumento } from '../utils/web3Lockdown';
+import { assertSessaoAutenticada } from '../utils/magicLinkAuth';
+import { limparFormulario } from '../utils/formReset';
+import { RotateCcw } from 'lucide-react';
 
 interface MeetingFormProps {
   wallet: WalletState;
@@ -270,6 +273,32 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
     }
   };
 
+  // Handler de Limpeza de Registros com Verificação de Estado
+  const handleLimparRegistros = () => {
+    // 1. Executa a limpeza estrutural e validação de estado (Regra de Negócio: Bloqueia se 'Aprovada' ou 'Aguardando Avaliação')
+    const resultado = limparFormulario('meeting-form');
+
+    // 2. Se a limpeza foi aprovada pelas regras de negócio, sincroniza o state do React para seu estado vazio / original
+    if (resultado.sucesso) {
+      setFormData({
+        dateTime: '',
+        title: '',
+        meetingType: 'Orientação',
+        academicUnit: '',
+        participants: [
+          { id: '1', role: 'Aluno', name: '', departmentOrId: '', checked: false },
+          { id: '2', role: 'Professor', name: '', departmentOrId: '', checked: false }
+        ],
+        pauta: '',
+        deliberacoes: '',
+        summaryAndDecisions: '',
+        actionChecklist: [],
+        extraNotes: ''
+      });
+      setFormError(null);
+    }
+  };
+
   // Toggle do checkbox de participante
   const handleParticipantToggle = (id: string) => {
     setFormData(prev => ({
@@ -353,6 +382,16 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+
+    // =========================================================================
+    // ETAPA 0: CLÁUSULA DE SEGURANÇA (AppSec Guard) - SESSÃO AUTENTICADA OBRIGATÓRIA
+    // =========================================================================
+    try {
+      assertSessaoAutenticada();
+    } catch (authViolation: any) {
+      setFormError(authViolation.message);
+      throw authViolation;
+    }
 
     // =========================================================================
     // ETAPA 1: VALIDAÇÃO DE ENTRADAS, SANITIZAÇÃO (.trim()) & CLÁUSULAS DE GUARDA
@@ -604,6 +643,17 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
                 >
                   <LockKeyhole className="w-3 h-3 text-emerald-700" />
                   <span>Travar Interface (Aprovada)</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-limpar-formulario"
+                  onClick={handleLimparRegistros}
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-white hover:bg-rose-50 text-stone-700 hover:text-rose-700 border border-[#DED8CD] hover:border-rose-300 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                  title="Reseta todos os campos do formulário para o estado original, desde que o documento esteja em rascunho"
+                >
+                  <RotateCcw className="w-3 h-3 text-stone-500" />
+                  <span>Limpar Registros</span>
                 </button>
               </div>
             </div>
@@ -993,25 +1043,39 @@ export const MeetingForm: React.FC<MeetingFormProps> = ({
               </div>
             )}
 
-            {/* Botão Principal Conforme Design HTML */}
-            <button
-              id="btn-submit-meeting"
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-4 px-3 bg-[#4A6741] text-white rounded-xl font-bold tracking-wide hover:bg-[#3d5536] transition-colors shadow-lg shadow-emerald-900/10 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 text-xs sm:text-base uppercase text-center leading-snug min-h-[52px]"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                  <span>{submissionStatusMessage || 'Processando envio e gravação...'}</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-5 h-5 shrink-0" />
-                  <span>ENVIAR ATA (CRIPTOGRAFAR, UPLOAD IPFS & REGISTRAR)</span>
-                </>
-              )}
-            </button>
+            {/* Barra de Ações: Submissão e Limpeza de Registros */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              <button
+                id="btn-limpar-formulario-rodape"
+                type="button"
+                onClick={handleLimparRegistros}
+                disabled={isSubmitting}
+                className="w-full sm:w-auto px-5 py-4 bg-[#FAF9F6] text-stone-700 hover:text-rose-700 hover:bg-rose-50 border border-[#DED8CD] hover:border-rose-300 rounded-xl font-semibold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 text-xs sm:text-sm min-h-[52px]"
+                title="Limpar todos os campos do formulário"
+              >
+                <RotateCcw className="w-4 h-4 text-stone-500" />
+                <span>Limpar Registros</span>
+              </button>
+
+              <button
+                id="btn-submit-meeting"
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 w-full py-4 px-3 bg-[#4A6741] text-white rounded-xl font-bold tracking-wide hover:bg-[#3d5536] transition-colors shadow-lg shadow-emerald-900/10 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 text-xs sm:text-base uppercase text-center leading-snug min-h-[52px]"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>{submissionStatusMessage || 'Processando envio e gravação...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5 shrink-0" />
+                    <span>ENVIAR ATA (CRIPTOGRAFAR, UPLOAD IPFS & REGISTRAR)</span>
+                  </>
+                )}
+              </button>
+            </div>
 
           </form>
         </section>

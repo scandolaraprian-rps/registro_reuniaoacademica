@@ -82,11 +82,13 @@ export const ReceiptsHistory: React.FC<ReceiptsHistoryProps> = ({
         {receipts.length > 0 && (
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
+              id="btn-limpar-historico"
               onClick={onClearHistory}
-              className="text-xs font-semibold text-rose-700 hover:text-rose-900 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-50 flex items-center gap-1 transition-colors cursor-pointer min-h-[36px]"
+              className="text-xs font-semibold text-rose-700 hover:text-rose-900 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-50 flex items-center gap-1.5 transition-colors cursor-pointer min-h-[36px]"
+              title="Limpar recibos salvos em cache local"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Limpar Registros
+              <span>Limpar Registros</span>
             </button>
           </div>
         )}
@@ -106,33 +108,34 @@ export const ReceiptsHistory: React.FC<ReceiptsHistoryProps> = ({
         </div>
       )}
 
-      {/* List or Empty State */}
-      {receipts.length === 0 ? (
-        <div className="bg-white border-2 border-dashed border-[#DED8CD] rounded-2xl p-8 sm:p-12 text-center space-y-4 shadow-sm">
-          <div className="w-12 h-12 rounded-full bg-[#FAF9F6] flex items-center justify-center mx-auto text-[#8C8579] border border-[#F2EDE4]">
-            <FileText className="w-6 h-6 text-[#4A6741]" />
+      {/* Container do Histórico de Recibos */}
+      <div id="container-historico-recibos" className="w-full">
+        {receipts.length === 0 ? (
+          <div className="bg-white border-2 border-dashed border-[#DED8CD] rounded-2xl p-8 sm:p-12 text-center space-y-4 shadow-sm">
+            <div className="w-12 h-12 rounded-full bg-[#FAF9F6] flex items-center justify-center mx-auto text-[#8C8579] border border-[#F2EDE4]">
+              <FileText className="w-6 h-6 text-[#4A6741]" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-serif italic font-bold text-[#2D2A26]">
+                Histórico Vazio
+              </h3>
+              <p className="empty-state text-xs text-[#8C8579] max-w-md mx-auto leading-relaxed">
+                Nenhum recibo registrado localmente.
+              </p>
+            </div>
+            <button
+              onClick={onNavigateToNew}
+              className="px-5 py-2.5 bg-[#4A6741] hover:bg-[#3d5536] text-white text-xs font-bold rounded-xl shadow-sm transition-colors cursor-pointer min-h-[40px]"
+            >
+              Registrar Primeira Ata
+            </button>
           </div>
-          <div className="space-y-1">
-            <h3 className="text-base font-serif italic font-bold text-[#2D2A26]">
-              Nenhuma ata registrada ainda
-            </h3>
-            <p className="text-xs text-[#8C8579] max-w-md mx-auto leading-relaxed">
-              Preencha o formulário de reunião acadêmica e assine para gerar o primeiro recibo criptográfico com gravação de hash na blockchain.
-            </p>
+        ) : filteredReceipts.length === 0 ? (
+          <div className="bg-white border border-[#EBE6DD] rounded-xl p-8 text-center text-xs text-[#8C8579]">
+            Nenhum registro encontrado para "{searchTerm}".
           </div>
-          <button
-            onClick={onNavigateToNew}
-            className="px-5 py-2.5 bg-[#4A6741] hover:bg-[#3d5536] text-white text-xs font-bold rounded-xl shadow-sm transition-colors cursor-pointer min-h-[40px]"
-          >
-            Registrar Primeira Ata
-          </button>
-        </div>
-      ) : filteredReceipts.length === 0 ? (
-        <div className="bg-white border border-[#EBE6DD] rounded-xl p-8 text-center text-xs text-[#8C8579]">
-          Nenhum registro encontrado para "{searchTerm}".
-        </div>
-      ) : (
-        <div className="space-y-3.5 sm:space-y-4">
+        ) : (
+          <div className="space-y-3.5 sm:space-y-4">
           {filteredReceipts.map((receipt) => (
             <div
               key={receipt.receiptId}
@@ -206,6 +209,7 @@ export const ReceiptsHistory: React.FC<ReceiptsHistoryProps> = ({
           ))}
         </div>
       )}
+      </div>
 
     </div>
   );

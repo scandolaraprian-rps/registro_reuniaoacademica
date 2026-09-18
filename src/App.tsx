@@ -20,6 +20,11 @@ import {
   LOCAL_STORAGE_USER_KEY,
   generateMockWallet 
 } from './utils/auth';
+import { assertSessaoAutenticada, 
+  encerrarSessaoAtiva,
+  sincronizarSessaoExistente
+} from './utils/magicLinkAuth';
+import { exibirToastFeedback } from './utils/formReset';
 
 import { Navbar } from './components/Navbar';
 import { MeetingForm } from './components/MeetingForm';
@@ -47,6 +52,15 @@ export default function App() {
     }
     return null; // Inicia sem login para exibir o gate institucional
   });
+
+  // Sincroniza sessão ativa de segurança com o usuário autenticado
+  useEffect(() => {
+    if (institutionalUser?.email) {
+      sincronizarSessaoExistente(institutionalUser.email);
+    } else {
+      encerrarSessaoAtiva();
+    }
+  }, [institutionalUser]);
   
   // Wallet State
   const [wallet, setWallet] = useState<WalletState>(() => {
@@ -238,6 +252,9 @@ export default function App() {
     encryptedBase64?: string,
     encryptionKeyHint?: string
   ) => {
+    // REQUISITO DE SEGURANÇA (AppSec): Validação de sessão autenticada antes do hash e da blockchain
+    assertSessaoAutenticada();
+
     setIsSubmitting(true);
 
     try {
@@ -308,9 +325,18 @@ export default function App() {
   };
 
   const handleClearHistory = () => {
-    if (window.confirm('Deseja realmente limpar todos os recibos salvos localmente?')) {
+    const confirmacao = window.confirm(
+      'Tem certeza que deseja limpar o histórico local de recibos? Esta ação não apaga os dados da blockchain, apenas a sua visualização.'
+    );
+    if (confirmacao) {
       setReceipts([]);
-      localStorage.removeItem(LOCAL_STORAGE_RECEIPTS_KEY);
+      try {
+        localStorage.removeItem(LOCAL_STORAGE_RECEIPTS_KEY);
+        localStorage.setItem(LOCAL_STORAGE_RECEIPTS_KEY, '[]');
+      } catch (e) {
+        console.error(e);
+      }
+      exibirToastFeedback('Histórico local de recibos limpo com sucesso.', 'sucesso');
     }
   };
 
@@ -337,6 +363,7 @@ export default function App() {
   };
 
   const handleLogoutInstitutional = () => {
+    encerrarSessaoAtiva();
     setInstitutionalUser(null);
     try {
       localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
