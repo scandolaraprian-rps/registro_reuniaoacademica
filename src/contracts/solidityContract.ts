@@ -203,6 +203,206 @@ contract RegistroAtaIPFS {
 }
 `;
 
+/**
+ * CONTRATO INTELIGENTE DE MÚLTIPLAS ASSINATURAS (MULTISIG ACADÊMICO)
+ * Suporta o fluxo de governança colegiada e consenso antes da consolidação on-chain.
+ * Previne o registro unilateral e a poluição da blockchain.
+ */
+export const SOLIDITY_MULTISIG_CONTRACT = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+/**
+ * @title RegistroAtaMultisig
+ * @dev Contrato inteligente com máquina de estados para registro descentralizado
+ * de atas acadêmicas baseado em Múltiplas Assinaturas (Multisig) e Quórum Institucional.
+ * 
+ * FLUXO DE GOVERNANÇA E DEFESA EM PROFUNDIDADE:
+ * 1. Proposta Inicial: O proponente registra a intenção com o hash criptográfico (bytes32)
+ *    e os co-signatários obrigatórios (ex: Aluno e Orientador).
+ *    A ata nasce no estado PENDENTE e NÃO é consolidada unilateralmente.
+ * 2. Atestação Coletiva: Cada participante atesta individualmente sua assinatura
+ *    via transação na blockchain ou atestação criptográfica autorizada.
+ * 3. Quórum de Conclusão: Quando atingido o número mínimo de assinaturas exigidas,
+ *    a ata pode ser consolidada formalmente, emitindo prova imutável e irrevogável.
+ */
+contract RegistroAtaMultisig {
+
+    enum EstadoAta {
+        Inexistente,
+        PendenteAssinaturas,
+        Aprovada,
+        Rejeitada
+    }
+
+    struct PropostaAta {
+        bytes32 documentHash;          // Hash representativo da ata (Keccak-256)
+        string ipfsCID;                // CID do IPFS contendo o documento criptografado
+        address proponente;            // Carteira do criador da proposta
+        uint256 quorumMinimo;          // Quantidade mínima de assinaturas necessárias
+        uint256 assinaturasColetadas;  // Total atual de confirmações
+        uint256 timestampCriacao;      // Data da submissão inicial
+        uint256 timestampConsolidacao;  // Data da consolidação formal
+        EstadoAta estado;              // Estado atual da máquina de estados
+        address[] coSignatarios;       // Lista de carteiras autorizadas a assinar
+    }
+
+    // Mapeamento: documentHash => PropostaAta
+    mapping(bytes32 => PropostaAta) public atas;
+
+    // Mapeamento: documentHash => (address => bool) para evitar voto/assinatura duplicada
+    mapping(bytes32 => mapping(address => bool)) public assinou;
+
+    // Lista de todos os hashes de atas submetidas
+    bytes32[] public historicoHashes;
+
+    // Eventos para auditoria de ciclo de vida
+    event PropostaCriada(
+        bytes32 indexed documentHash, 
+        address indexed proponente, 
+        uint256 quorumMinimo, 
+        string ipfsCID
+    );
+
+    event AssinaturaAtestada(
+        bytes32 indexed documentHash, 
+        address indexed signatario, 
+        uint256 totalColetado
+    );
+
+    event AtaConsolidada(
+        bytes32 indexed documentHash, 
+        address indexed consolidador, 
+        uint256 timestamp
+    );
+
+    event AtaRejeitada(
+        bytes32 indexed documentHash, 
+        address indexed rejeitador, 
+        string motivo
+    );
+
+    modifier hashValido(bytes32 _documentHash) {
+        require(_documentHash != bytes32(0), "Hash nao pode ser nulo (bytes32(0))");
+        _;
+    }
+
+    /**
+     * @notice Cria uma nova proposta de ata acadêmica aguardando quórum de co-assinaturas
+     * @param _documentHash Hash Keccak-256 dos dados sanitizados
+     * @param _ipfsCID Identificador IPFS da ata cifrada
+     * @param _coSignatarios Lista de endereços autorizados a assinar
+     * @param _quorumMinimo Quantidade mínima de aprovações requeridas
+     */
+    function proporAta(
+        bytes32 _documentHash,
+        string calldata _ipfsCID,
+        address[] calldata _coSignatarios,
+        uint256 _quorumMinimo
+    ) external hashValido(_documentHash) returns (bool) {
+        require(atas[_documentHash].estado == EstadoAta.Inexistente, "Ata ja submetida");
+        require(_coSignatarios.length > 0, "Lista de signatarios nao pode ser vazia");
+        require(_quorumMinimo > 0 && _quorumMinimo <= _coSignatarios.length, "Quorum invalido");
+
+        atas[_documentHash] = PropostaAta({
+            documentHash: _documentHash,
+            ipfsCID: _ipfsCID,
+            proponente: msg.sender,
+            quorumMinimo: _quorumMinimo,
+            assinaturasColetadas: 0,
+            timestampCriacao: block.timestamp,
+            timestampConsolidacao: 0,
+            estado: EstadoAta.PendenteAssinaturas,
+            coSignatarios: _coSignatarios
+        });
+
+        historicoHashes.push(_documentHash);
+
+        // Se o proponente fizer parte dos co-signatários, já computa sua assinatura
+        for (uint256 i = 0; i < _coSignatarios.length; i++) {
+            if (_coSignatarios[i] == msg.sender) {
+                assinou[_documentHash][msg.sender] = true;
+                atas[_documentHash].assinaturasColetadas++;
+                emit AssinaturaAtestada(_documentHash, msg.sender, atas[_documentHash].assinaturasColetadas);
+                break;
+            }
+        }
+
+        emit PropostaCriada(_documentHash, msg.sender, _quorumMinimo, _ipfsCID);
+        return true;
+    }
+
+    /**
+     * @notice Atesta a assinatura de um participante na ata proposta
+     * @param _documentHash Hash da ata a ser homologada
+     */
+    function atestarAssinatura(bytes32 _documentHash) external hashValido(_documentHash) returns (bool) {
+        PropostaAta storage p = atas[_documentHash];
+        require(p.estado == EstadoAta.PendenteAssinaturas, "Ata nao esta pendente de assinaturas");
+        require(!assinou[_documentHash][msg.sender], "Signatario ja atestou esta ata");
+
+        // Verifica se quem esta chamando e signatario autorizado
+        bool autorizado = false;
+        for (uint256 i = 0; i < p.coSignatarios.length; i++) {
+            if (p.coSignatarios[i] == msg.sender) {
+                autorizado = true;
+                break;
+            }
+        }
+        require(autorizado, "Endereco nao autorizado como signatario desta ata");
+
+        assinou[_documentHash][msg.sender] = true;
+        p.assinaturasColetadas++;
+
+        emit AssinaturaAtestada(_documentHash, msg.sender, p.assinaturasColetadas);
+        return true;
+    }
+
+    /**
+     * @notice Consolida a ata na blockchain apos atingido o quorum de assinaturas
+     * @param _documentHash Hash da ata homologada
+     */
+    function consolidarAta(bytes32 _documentHash) external hashValido(_documentHash) returns (bool) {
+        PropostaAta storage p = atas[_documentHash];
+        require(p.estado == EstadoAta.PendenteAssinaturas, "Estado incompativel com consolidacao");
+        require(p.assinaturasColetadas >= p.quorumMinimo, "Quorum minimo de assinaturas nao atingido");
+
+        p.estado = EstadoAta.Aprovada;
+        p.timestampConsolidacao = block.timestamp;
+
+        emit AtaConsolidada(_documentHash, msg.sender, block.timestamp);
+        return true;
+    }
+
+    /**
+     * @notice Consulta detalhes e status de quorum de uma ata
+     */
+    function obterProposta(bytes32 _documentHash) external view returns (
+        EstadoAta estado,
+        address proponente,
+        uint256 quorumMinimo,
+        uint256 assinaturasColetadas,
+        uint256 timestampCriacao,
+        uint256 timestampConsolidacao,
+        string memory ipfsCID
+    ) {
+        PropostaAta memory p = atas[_documentHash];
+        return (
+            p.estado,
+            p.proponente,
+            p.quorumMinimo,
+            p.assinaturasColetadas,
+            p.timestampCriacao,
+            p.timestampConsolidacao,
+            p.ipfsCID
+        );
+    }
+
+    function totalAtas() external view returns (uint256) {
+        return historicoHashes.length;
+    }
+}
+`;
+
 
 export const SMART_CONTRACT_ABI = [
   {

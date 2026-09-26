@@ -13,7 +13,13 @@ import {
   CheckCircle2,
   FileCode
 } from 'lucide-react';
-import { SOLIDITY_SOURCE_CODE, SOLIDITY_IPFS_CONTRACT, SMART_CONTRACT_ABI, SUPPORTED_NETWORKS } from '../contracts/solidityContract';
+import { 
+  SOLIDITY_SOURCE_CODE, 
+  SOLIDITY_IPFS_CONTRACT, 
+  SOLIDITY_MULTISIG_CONTRACT,
+  SMART_CONTRACT_ABI, 
+  SUPPORTED_NETWORKS 
+} from '../contracts/solidityContract';
 
 interface SmartContractViewerProps {
   customContractAddress: string;
@@ -28,10 +34,11 @@ export const SmartContractViewer: React.FC<SmartContractViewerProps> = ({
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedIpfsCode, setCopiedIpfsCode] = useState(false);
+  const [copiedMultisigCode, setCopiedMultisigCode] = useState(false);
   const [copiedAbi, setCopiedAbi] = useState(false);
   const [addressInput, setAddressInput] = useState(customContractAddress);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [activeCodeTab, setActiveCodeTab] = useState<'solidity' | 'solidityIPFS' | 'abi' | 'ethersSnippet'>('solidityIPFS');
+  const [activeCodeTab, setActiveCodeTab] = useState<'solidityMultisig' | 'solidityIPFS' | 'solidity' | 'abi' | 'ethersSnippet'>('solidityMultisig');
 
   const currentNetwork = SUPPORTED_NETWORKS.find(n => n.id === selectedNetworkId) || SUPPORTED_NETWORKS[0];
 
@@ -45,6 +52,12 @@ export const SmartContractViewer: React.FC<SmartContractViewerProps> = ({
     navigator.clipboard.writeText(SOLIDITY_IPFS_CONTRACT);
     setCopiedIpfsCode(true);
     setTimeout(() => setCopiedIpfsCode(false), 2000);
+  };
+
+  const handleCopyMultisigCode = () => {
+    navigator.clipboard.writeText(SOLIDITY_MULTISIG_CONTRACT);
+    setCopiedMultisigCode(true);
+    setTimeout(() => setCopiedMultisigCode(false), 2000);
   };
 
   const handleCopyAbi = () => {
@@ -226,15 +239,25 @@ async function registrarAtaNaBlockchain(bytes32Hash) {
         <div className="bg-[#24211e] px-4 py-2.5 border-b border-white/10 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
-              onClick={() => setActiveCodeTab('solidityIPFS')}
+              onClick={() => setActiveCodeTab('solidityMultisig')}
               className={`px-3 py-1.5 text-xs font-mono rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeCodeTab === 'solidityIPFS'
+                activeCodeTab === 'solidityMultisig'
                   ? 'bg-[#4A6741] text-white border border-[#4A6741]'
                   : 'text-[#8C8579] hover:text-[#F2EDE4]'
               }`}
             >
+              <span>RegistroAtaMultisig.sol</span>
+              <span className="text-[9px] bg-black/40 px-1 py-0.2 rounded text-emerald-300 font-bold uppercase">Multisig / Quórum</span>
+            </button>
+            <button
+              onClick={() => setActiveCodeTab('solidityIPFS')}
+              className={`px-3 py-1.5 text-xs font-mono rounded-lg font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeCodeTab === 'solidityIPFS'
+                  ? 'bg-white/10 text-emerald-400 border border-white/15'
+                  : 'text-[#8C8579] hover:text-[#F2EDE4]'
+              }`}
+            >
               <span>RegistroAtaIPFS.sol</span>
-              <span className="text-[9px] bg-black/40 px-1 py-0.2 rounded text-emerald-300 font-bold uppercase">CID On-Chain</span>
             </button>
             <button
               onClick={() => setActiveCodeTab('solidity')}
@@ -269,6 +292,16 @@ async function registrarAtaNaBlockchain(bytes32Hash) {
           </div>
 
           <div>
+            {activeCodeTab === 'solidityMultisig' && (
+              <button
+                id="btn-copy-solidity-multisig"
+                onClick={handleCopyMultisigCode}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700/60 hover:bg-emerald-700 text-white border border-emerald-600 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                {copiedMultisigCode ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedMultisigCode ? 'Copiado!' : 'Copiar RegistroAtaMultisig.sol'}</span>
+              </button>
+            )}
             {activeCodeTab === 'solidityIPFS' && (
               <button
                 id="btn-copy-solidity-ipfs"
@@ -304,6 +337,12 @@ async function registrarAtaNaBlockchain(bytes32Hash) {
 
         {/* Code Content */}
         <div className="p-5 overflow-x-auto max-h-[500px]">
+          {activeCodeTab === 'solidityMultisig' && (
+            <pre className="font-mono text-xs text-[#DED8CD] leading-relaxed select-all">
+              {SOLIDITY_MULTISIG_CONTRACT}
+            </pre>
+          )}
+
           {activeCodeTab === 'solidityIPFS' && (
             <pre className="font-mono text-xs text-[#DED8CD] leading-relaxed select-all">
               {SOLIDITY_IPFS_CONTRACT}

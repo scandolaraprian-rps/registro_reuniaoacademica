@@ -5,7 +5,9 @@ import {
   CryptoReceipt, 
   WalletState, 
   BlockchainNetwork,
-  InstitutionalUser 
+  InstitutionalUser,
+  MultisigProposal,
+  CoSignerStatus
 } from './types';
 import { 
   SUPPORTED_NETWORKS, 
@@ -24,12 +26,19 @@ import { assertSessaoAutenticada,
   encerrarSessaoAtiva,
   sincronizarSessaoExistente
 } from './utils/magicLinkAuth';
+import { 
+  criarPropostaMultisig, 
+  atestarAssinaturaParticipante, 
+  marcarAtaConsolidadaOnChain, 
+  carregarTodasPropostas 
+} from './utils/magicLinkMultisig';
 import { exibirToastFeedback } from './utils/formReset';
 
 import { Navbar } from './components/Navbar';
 import { MeetingForm } from './components/MeetingForm';
 import { InstitutionalLoginGate } from './components/InstitutionalLoginGate';
 import { CryptoReceiptModal } from './components/CryptoReceiptModal';
+import { MultisigModal } from './components/MultisigModal';
 import { SmartContractViewer } from './components/SmartContractViewer';
 import { AuditVerifier } from './components/AuditVerifier';
 import { ReceiptsHistory } from './components/ReceiptsHistory';
@@ -128,6 +137,14 @@ export default function App() {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [auditPrefillReceipt, setAuditPrefillReceipt] = useState<CryptoReceipt | null>(null);
+
+  // Estado de Múltiplas Assinaturas (Multisig via Magic Links)
+  const [activeProposal, setActiveProposal] = useState<MultisigProposal | null>(() => {
+    const todas = carregarTodasPropostas();
+    return todas.length > 0 ? todas[0] : null;
+  });
+  const [isMultisigModalOpen, setIsMultisigModalOpen] = useState<boolean>(false);
+  const [isConsolidatingProposal, setIsConsolidatingProposal] = useState<boolean>(false);
 
   // Salva recibos no localStorage sempre que atualizado
   useEffect(() => {
@@ -250,7 +267,8 @@ export default function App() {
     canonicalString: string,
     ipfsCID?: string,
     encryptedBase64?: string,
-    encryptionKeyHint?: string
+    encryptionKeyHint?: string,
+    coSigners?: CoSignerStatus[]
   ) => {
     // REQUISITO DE SEGURANÇA (AppSec): Validação de sessão autenticada antes do hash e da blockchain
     assertSessaoAutenticada();
@@ -309,18 +327,89 @@ export default function App() {
         meetingSnapshot: formData,
         ipfsCID: ipfsCID,
         encryptedPayloadBase64: encryptedBase64,
-        encryptionKeyHint: encryptionKeyHint
+        encryptionKeyHint: encryptionKeyHint,
+        coSigners: coSigners,
+        isMultisig: !!(coSigners && coSigners.length > 1)
       };
 
       // Adiciona aos recibos
       setReceipts(prev => [newReceipt, ...prev]);
       setActiveReceipt(newReceipt);
       setIsReceiptModalOpen(true);
+      return txHash;
     } catch (err: any) {
       console.error(err);
       alert(`Erro ao registrar ata: ${err.message || 'Falha na transação'}`);
+      throw err;
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handler de Abertura de Proposta Multisig Pré-Consenso via Magic Link
+  const handleInitiateMultisig = async (
+    formData: AcademicMeetingData,
+    chosenHash: string,
+    canonicalString: string,
+    ipfsCID?: string,
+    encryptedBase64?: string,
+    encryptionKeyHint?: string
+  ) => {
+    assertSessaoAutenticada();
+    setIsSubmitting(true);
+    try {
+      const proposta = criarPropostaMultisig({
+        meetingData: formData,
+        documentHash: chosenHash,
+        hashAlgorithm: chosenHash.length === 66 ? 'Keccak-256' : 'SHA-256',
+        canonicalString,
+        ipfsCID,
+        encryptedPayloadBase64: encryptedBase64,
+        encryptionKeyHint,
+        proposerUser: institutionalUser,
+        proposerWallet: wallet.address || undefined
+      });
+      setActiveProposal(proposta);
+      setIsMultisigModalOpen(true);
+      exibirToastFeedback('Proposta de ata submetida! Quórum de Magic Links aberto.', 'sucesso');
+    } catch (err: any) {
+      console.error(err);
+      alert(`Falha ao registrar proposta: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handler de Atestação de Assinatura via Magic Link
+  const handleAttestParticipant = async (participantId: string, token?: string) => {
+    if (!activeProposal) return;
+    const res = atestarAssinaturaParticipante(activeProposal.id, participantId, token);
+    setActiveProposal({ ...res.propostaAtualizada });
+    exibirToastFeedback(res.mensagem, 'sucesso');
+  };
+
+  // Handler de Consolidação na Blockchain quando o Quórum é Atingido
+  const handleConsolidateProposalOnChain = async (proposal: MultisigProposal) => {
+    setIsConsolidatingProposal(true);
+    try {
+      const txHash = await handleSubmitMeeting(
+        proposal.meetingData,
+        proposal.documentHash,
+        proposal.canonicalString,
+        proposal.ipfsCID,
+        proposal.encryptedPayloadBase64,
+        proposal.encryptionKeyHint,
+        proposal.coSigners
+      );
+      const atualizada = marcarAtaConsolidadaOnChain(proposal.id, txHash || generateSimulatedTxHash());
+      setActiveProposal(atualizada);
+      setIsMultisigModalOpen(false);
+      exibirToastFeedback('Ata consolidada imutavelmente na blockchain com todas as assinaturas!', 'sucesso');
+    } catch (err: any) {
+      console.error(err);
+      alert(`Falha na consolidação on-chain: ${err.message}`);
+    } finally {
+      setIsConsolidatingProposal(false);
     }
   };
 
@@ -401,9 +490,12 @@ export default function App() {
               wallet={wallet}
               onConnectWallet={handleConnectWallet}
               onSubmitMeeting={handleSubmitMeeting}
+              onInitiateMultisigProposal={handleInitiateMultisig}
               isSubmitting={isSubmitting}
               institutionalUser={institutionalUser}
               onLogoutInstitutional={handleLogoutInstitutional}
+              activeProposal={activeProposal}
+              onOpenMultisigModal={() => setIsMultisigModalOpen(true)}
             />
           )
         )}
@@ -442,6 +534,16 @@ export default function App() {
         isOpen={isReceiptModalOpen}
         onClose={() => setIsReceiptModalOpen(false)}
         onNavigateToAudit={handleNavigateToAudit}
+      />
+
+      {/* Modal do Fluxo de Múltiplas Assinaturas (Multisig via Magic Links) */}
+      <MultisigModal
+        isOpen={isMultisigModalOpen}
+        proposal={activeProposal}
+        onClose={() => setIsMultisigModalOpen(false)}
+        onAttestParticipant={handleAttestParticipant}
+        onConsolidateOnChain={handleConsolidateProposalOnChain}
+        isConsolidating={isConsolidatingProposal}
       />
 
       {/* Institutional Footer */}

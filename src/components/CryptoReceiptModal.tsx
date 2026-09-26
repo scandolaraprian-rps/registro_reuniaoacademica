@@ -356,6 +356,37 @@ export const CryptoReceiptModal: React.FC<CryptoReceiptModalProps> = ({
 
             </div>
 
+            {/* Múltiplas Assinaturas e Quórum Institucional (se houver co-signatários) */}
+            {receipt.coSigners && receipt.coSigners.length > 0 && (
+              <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/50 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                  <span className="uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                    Quórum Homologado via Magic Links ({receipt.coSigners.length} Co-Signatários)
+                  </span>
+                  <span className="text-[10px] bg-emerald-200/80 text-emerald-800 px-2 py-0.5 rounded-full font-mono">
+                    Consenso 100%
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {receipt.coSigners.map((cs) => (
+                    <div key={cs.participantId} className="p-2 rounded-lg bg-white border border-emerald-200/70 text-xs flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-[#2D2A26] flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{cs.name}</span>
+                        </div>
+                        <div className="text-[10px] text-[#8C8579] font-mono">{cs.email}</div>
+                      </div>
+                      <span className="text-[9px] font-bold text-emerald-700 uppercase bg-emerald-100 px-1.5 py-0.5 rounded">
+                        {cs.role}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Rodapé Institucional do Certificado */}

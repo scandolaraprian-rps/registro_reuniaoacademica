@@ -17,6 +17,74 @@ export interface Participant {
   name: string;
   departmentOrId: string;
   checked: boolean;
+  email?: string;
+  walletAddress?: string;
+  signed?: boolean;
+  signedAt?: number;
+}
+
+export type AtaState = 
+  | 'RASCUNHO' 
+  | 'PENDENTE_ASSINATURAS' 
+  | 'APROVADA_AGUARDANDO_CONSOLIDACAO' 
+  | 'CONSOLIDADA_ON_CHAIN' 
+  | 'REJEITADA';
+
+export interface CoSignerStatus {
+  participantId: string;
+  name: string;
+  role: string;
+  email: string;
+  walletAddress: string;
+  signed: boolean;
+  signedAt?: number;
+  signatureHash?: string;
+  magicToken?: string;
+  magicLinkUrl?: string;
+}
+
+export interface MultisigProposal {
+  id: string;
+  documentHash: string;
+  hashAlgorithm: 'Keccak-256' | 'SHA-256';
+  meetingData: AcademicMeetingData;
+  canonicalString: string;
+  ipfsCID?: string;
+  encryptedPayloadBase64?: string;
+  encryptionKeyHint?: string;
+  status: AtaState;
+  proposer: {
+    name: string;
+    email: string;
+    role: string;
+    walletAddress: string;
+  };
+  coSigners: CoSignerStatus[];
+  requiredSignatures: number;
+  collectedSignatures: number;
+  createdAt: number;
+  consolidatedTxId?: string;
+  consolidatedAt?: number;
+}
+
+export interface FormValidationMetrics {
+  titleLength: number;
+  titleAlphaCount: number;
+  titleAlphaDensity: number;
+  pautaLength: number;
+  pautaAlphaCount: number;
+  pautaAlphaDensity: number;
+  deliberacoesLength: number;
+  deliberacoesAlphaCount: number;
+  deliberacoesAlphaDensity: number;
+  activeParticipantsCount: number;
+}
+
+export interface FormValidationResult {
+  isValid: boolean;
+  errors: Record<string, string>;
+  warnings: string[];
+  metrics: FormValidationMetrics;
 }
 
 export interface ActionItem {
@@ -59,6 +127,8 @@ export interface CryptoReceipt {
   ipfsCID?: string;
   encryptedPayloadBase64?: string;
   encryptionKeyHint?: string;
+  coSigners?: CoSignerStatus[];
+  isMultisig?: boolean;
 }
 
 export interface BlockchainNetwork {

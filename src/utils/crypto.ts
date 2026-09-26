@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { AcademicMeetingData } from '../types';
+import { eliminarCaracteresNulosEInvisiveis } from './formSanitization';
 
 /**
  * ==============================================================================
@@ -7,14 +8,15 @@ import { AcademicMeetingData } from '../types';
  * ==============================================================================
  * 
  * Previne falsos positivos de adulteração durante a auditoria criptográfica
- * decorrentes de diferenças invisíveis de formatação.
+ * decorrentes de diferenças invisíveis de formatação ou injeção de bytes nulos.
  * 
  * Passos executados:
- * 1. .trim(): Remove espaços em branco no início e no final da string inteira.
- * 2. .replace(/\s+/g, ' '): Utiliza expressão regular para substituir qualquer
+ * 1. eliminarCaracteresNulosEInvisiveis(): Elimina \0, \x00 e Zero-Width Spaces.
+ * 2. .trim(): Remove espaços em branco no início e no final da string inteira.
+ * 3. .replace(/\s+/g, ' '): Utiliza expressão regular para substituir qualquer
  *    sequência de múltiplos espaços, tabulações ou quebras de linha por um único
  *    espaço simples.
- * 3. .toLowerCase(): Padroniza todo o texto para letras minúsculas, garantindo
+ * 4. .toLowerCase(): Padroniza todo o texto para letras minúsculas, garantindo
  *    que variações de caixa alta/baixa não alterem o hash matemático.
  * 
  * @param rawText Texto bruto a ser limpo
@@ -22,7 +24,8 @@ import { AcademicMeetingData } from '../types';
  */
 export function sanitizeForHashing(rawText: string): string {
   if (typeof rawText !== 'string') return '';
-  return rawText
+  const semInvisiveis = eliminarCaracteresNulosEInvisiveis(rawText);
+  return semInvisiveis
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
