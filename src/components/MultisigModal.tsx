@@ -51,11 +51,12 @@ export const MultisigModal: React.FC<MultisigModalProps> = ({
     setAttestingId(participantId);
     setFeedbackMsg(null);
     try {
+      setFeedbackMsg('Processando assinatura via Magic Link e verificando quórum...');
       await onAttestParticipant(participantId, token);
-      setFeedbackMsg('Assinatura atestada com sucesso via Magic Link institucional!');
-      setTimeout(() => setFeedbackMsg(null), 3000);
+      setFeedbackMsg('Assinatura confirmada com sucesso! Caso o quórum unânime tenha sido atingido, o envio para a blockchain foi disparado.');
+      setTimeout(() => setFeedbackMsg(null), 4000);
     } catch (err: any) {
-      setFeedbackMsg(`Erro ao atestar: ${err.message}`);
+      setFeedbackMsg(`Erro ao atestar assinatura: ${err.message}`);
     } finally {
       setAttestingId(null);
     }

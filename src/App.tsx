@@ -33,6 +33,13 @@ import {
   carregarTodasPropostas 
 } from './utils/magicLinkMultisig';
 import { exibirToastFeedback } from './utils/formReset';
+import { 
+  transmitirEConfirmarHashOnChain, 
+  compilarReciboCriptografico,
+  BlockchainTransactionError 
+} from './utils/blockchainConnector';
+import { travarInterface } from './utils/web3Lockdown';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 import { Navbar } from './components/Navbar';
 import { MeetingForm } from './components/MeetingForm';
@@ -145,6 +152,17 @@ export default function App() {
   });
   const [isMultisigModalOpen, setIsMultisigModalOpen] = useState<boolean>(false);
   const [isConsolidatingProposal, setIsConsolidatingProposal] = useState<boolean>(false);
+
+  // Monitoramento e Tratamento de Falhas na Blockchain (Eliminando Falhas Silenciosas)
+  const [blockchainError, setBlockchainError] = useState<{
+    tipo: string;
+    mensagem: string;
+    codigoOriginal?: string | number;
+  } | null>(null);
+  const [blockchainProgress, setBlockchainProgress] = useState<{
+    etapa: string;
+    mensagem: string;
+  } | null>(null);
 
   // Salva recibos no localStorage sempre que atualizado
   useEffect(() => {
@@ -269,77 +287,57 @@ export default function App() {
     encryptedBase64?: string,
     encryptionKeyHint?: string,
     coSigners?: CoSignerStatus[]
-  ) => {
+  ): Promise<string> => {
     // REQUISITO DE SEGURANÇA (AppSec): Validação de sessão autenticada antes do hash e da blockchain
     assertSessaoAutenticada();
 
     setIsSubmitting(true);
+    setBlockchainError(null);
 
     try {
-      let txHash = '';
-      let blockNumber = 0;
-      let gasUsed = '45120';
-      const signerAddr = wallet.address || '0x71C59a38F8e684077674681f215E5c6778401aB7';
-
-      // 1. Caso haja provedor MetaMask real com contrato
-      if (!wallet.isSimulated && typeof window !== 'undefined' && (window as any).ethereum) {
-        try {
-          const provider = new ethers.BrowserProvider((window as any).ethereum);
-          const signer = await provider.getSigner();
-
-          // Tenta chamar o contrato se o usuário configurou um contrato válido
-          const contract = new ethers.Contract(contractAddress, SMART_CONTRACT_ABI, signer);
-          const tx = await contract.registrarHash(chosenHash);
-          const txReceipt = await tx.wait();
-
-          txHash = txReceipt.hash;
-          blockNumber = txReceipt.blockNumber;
-          gasUsed = txReceipt.gasUsed ? txReceipt.gasUsed.toString() : '45120';
-        } catch (contractErr: any) {
-          console.warn('Interação direta com contrato falhou ou rejeitada; prosseguindo com recibo determinístico:', contractErr);
-          // Fallback para geração realista
-          await new Promise(r => setTimeout(r, 1200));
-          txHash = generateSimulatedTxHash();
-          blockNumber = 5829100 + Math.floor(Math.random() * 500);
-        }
-      } else {
-        // 2. Modo Simulação / Testnet Instantânea
-        await new Promise(r => setTimeout(r, 1000));
-        txHash = generateSimulatedTxHash();
-        blockNumber = 5829100 + Math.floor(Math.random() * 500);
-      }
-
-      const newReceipt: CryptoReceipt = {
-        receiptId: `rec_${Date.now()}`,
+      // Rotina assíncrona para aguardar confirmação da transação na rede e capturar o txId
+      const resultadoTx = await transmitirEConfirmarHashOnChain({
         documentHash: chosenHash,
-        hashAlgorithm: chosenHash.length === 66 ? 'Keccak-256' : 'SHA-256',
-        txId: txHash,
-        blockNumber: blockNumber,
-        timestamp: Date.now(),
-        formattedDate: new Date().toLocaleString('pt-BR'),
-        signerAddress: signerAddr,
-        networkId: wallet.network.id,
-        networkName: wallet.network.name,
-        contractAddress: contractAddress,
-        gasUsed: gasUsed,
-        status: 'confirmed',
-        canonicalDataString: canonicalString,
-        meetingSnapshot: formData,
-        ipfsCID: ipfsCID,
-        encryptedPayloadBase64: encryptedBase64,
-        encryptionKeyHint: encryptionKeyHint,
-        coSigners: coSigners,
-        isMultisig: !!(coSigners && coSigners.length > 1)
-      };
+        contractAddress,
+        wallet,
+        onProgresso: (etapa, mensagem) => {
+          setBlockchainProgress({ etapa, mensagem });
+        }
+      });
 
-      // Adiciona aos recibos
+      // Compilação rigorosa do recibo criptográfico visual vinculado ao txId capturado
+      const newReceipt = compilarReciboCriptografico({
+        resultadoTx,
+        documentHash: chosenHash,
+        meetingData: formData,
+        canonicalDataString: canonicalString,
+        ipfsCID,
+        encryptedPayloadBase64: encryptedBase64,
+        encryptionKeyHint,
+        coSigners
+      });
+
+      // Adiciona aos recibos e renderiza no histórico
       setReceipts(prev => [newReceipt, ...prev]);
       setActiveReceipt(newReceipt);
       setIsReceiptModalOpen(true);
-      return txHash;
+      setBlockchainProgress(null);
+
+      // Trava o formulário na interface para proteger o documento
+      travarInterface(formData);
+
+      exibirToastFeedback(`Recibo emitido com sucesso! TxID: ${resultadoTx.txId.substring(0, 10)}...`, 'sucesso');
+      return resultadoTx.txId;
     } catch (err: any) {
-      console.error(err);
-      alert(`Erro ao registrar ata: ${err.message || 'Falha na transação'}`);
+      console.error('[Blockchain Communication Error]', err);
+      const erroTratado = {
+        tipo: err?.tipo || 'ERRO_BLOCKCHAIN',
+        mensagem: err?.message || 'Falha na comunicação com o contrato inteligente na blockchain.',
+        codigoOriginal: err?.codigoOriginal
+      };
+      setBlockchainError(erroTratado);
+      setBlockchainProgress(null);
+      exibirToastFeedback(erroTratado.mensagem, 'erro');
       throw err;
     } finally {
       setIsSubmitting(false);
@@ -357,6 +355,7 @@ export default function App() {
   ) => {
     assertSessaoAutenticada();
     setIsSubmitting(true);
+    setBlockchainError(null);
     try {
       const proposta = criarPropostaMultisig({
         meetingData: formData,
@@ -374,7 +373,7 @@ export default function App() {
       exibirToastFeedback('Proposta de ata submetida! Quórum de Magic Links aberto.', 'sucesso');
     } catch (err: any) {
       console.error(err);
-      alert(`Falha ao registrar proposta: ${err.message}`);
+      exibirToastFeedback(`Falha ao registrar proposta: ${err.message}`, 'erro');
     } finally {
       setIsSubmitting(false);
     }
@@ -383,14 +382,29 @@ export default function App() {
   // Handler de Atestação de Assinatura via Magic Link
   const handleAttestParticipant = async (participantId: string, token?: string) => {
     if (!activeProposal) return;
-    const res = atestarAssinaturaParticipante(activeProposal.id, participantId, token);
-    setActiveProposal({ ...res.propostaAtualizada });
-    exibirToastFeedback(res.mensagem, 'sucesso');
+    try {
+      const res = atestarAssinaturaParticipante(activeProposal.id, participantId, token);
+      setActiveProposal({ ...res.propostaAtualizada });
+      exibirToastFeedback(res.mensagem, 'sucesso');
+
+      // DIRETRIZ 1: Garantir que o evento de aprovação unânime via links mágicos dispare imediatamente a função de envio do hash para a blockchain
+      const todasAssinadas = res.propostaAtualizada.coSigners.every(c => c.signed);
+      const atingiuQuorum = res.propostaAtualizada.collectedSignatures >= res.propostaAtualizada.requiredSignatures;
+
+      if (todasAssinadas || atingiuQuorum || res.propostaAtualizada.status === 'APROVADA_AGUARDANDO_CONSOLIDACAO') {
+        exibirToastFeedback('Quórum de aprovação unânime atingido! Disparando envio do hash para a blockchain...', 'aviso');
+        await handleConsolidateProposalOnChain(res.propostaAtualizada);
+      }
+    } catch (err: any) {
+      console.error('[Attestation Error]', err);
+      exibirToastFeedback(err.message, 'erro');
+    }
   };
 
   // Handler de Consolidação na Blockchain quando o Quórum é Atingido
   const handleConsolidateProposalOnChain = async (proposal: MultisigProposal) => {
     setIsConsolidatingProposal(true);
+    setBlockchainError(null);
     try {
       const txHash = await handleSubmitMeeting(
         proposal.meetingData,
@@ -401,13 +415,13 @@ export default function App() {
         proposal.encryptionKeyHint,
         proposal.coSigners
       );
-      const atualizada = marcarAtaConsolidadaOnChain(proposal.id, txHash || generateSimulatedTxHash());
+      const atualizada = marcarAtaConsolidadaOnChain(proposal.id, txHash);
       setActiveProposal(atualizada);
       setIsMultisigModalOpen(false);
       exibirToastFeedback('Ata consolidada imutavelmente na blockchain com todas as assinaturas!', 'sucesso');
     } catch (err: any) {
-      console.error(err);
-      alert(`Falha na consolidação on-chain: ${err.message}`);
+      console.error('[Consolidation Error]', err);
+      // O erro já foi formatado e setado no blockchainError com alerta explícito na interface
     } finally {
       setIsConsolidatingProposal(false);
     }
@@ -482,6 +496,83 @@ export default function App() {
 
       {/* Main Content Area - padded for mobile bottom dock */}
       <main className="flex-1 pb-24 sm:pb-16">
+        
+        {/* Alerta Explícito de Falha na Blockchain (Diretriz 2 - Eliminação de Falhas Silenciosas) */}
+        {blockchainError && (
+          <div 
+            id="blockchain-error-alert"
+            role="alert" 
+            className="max-w-6xl mx-auto my-4 mx-3 sm:mx-6 p-4 rounded-xl bg-rose-50 border-2 border-rose-400 text-rose-950 shadow-md animate-fade-in flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-xs sm:text-sm uppercase tracking-wide text-rose-950">
+                    Alerta de Falha na Blockchain: {blockchainError.tipo}
+                  </span>
+                  {blockchainError.codigoOriginal && (
+                    <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-rose-200 text-rose-900 border border-rose-300">
+                      Código: {String(blockchainError.codigoOriginal)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-rose-900 leading-relaxed">
+                  {blockchainError.mensagem}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              {activeProposal && activeProposal.status !== 'CONSOLIDADA_ON_CHAIN' && (
+                <button
+                  id="btn-retry-blockchain"
+                  type="button"
+                  onClick={() => handleConsolidateProposalOnChain(activeProposal)}
+                  className="px-3.5 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Tentar Novamente</span>
+                </button>
+              )}
+              <button
+                id="btn-dismiss-blockchain-error"
+                type="button"
+                onClick={() => setBlockchainError(null)}
+                className="px-3 py-2 rounded-lg bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Dispensar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Banner de Sincronização e Confirmação Assíncrona da Transação (Diretriz 3) */}
+        {blockchainProgress && (
+          <div 
+            id="blockchain-progress-banner"
+            role="status"
+            className="max-w-6xl mx-auto my-4 mx-3 sm:mx-6 p-4 rounded-xl bg-emerald-50 border-2 border-[#4A6741] text-[#2D2A26] shadow-md flex items-center justify-between gap-3 animate-pulse"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-[#4A6741] border-t-transparent rounded-full animate-spin shrink-0" />
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#4A6741] block">
+                  Comunicação com o Smart Contract ({blockchainProgress.etapa})
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-[#2D2A26] font-mono">
+                  {blockchainProgress.mensagem}
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono font-semibold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-md hidden sm:inline-block">
+              Aguardando Bloco
+            </span>
+          </div>
+        )}
+
         {activeTab === 'form' && (
           !institutionalUser ? (
             <InstitutionalLoginGate onLoginSuccess={handleInstitutionalLogin} />
