@@ -143,19 +143,31 @@ export async function calculateSha256(rawText: string): Promise<string> {
   const cleanText = sanitizeForHashing(rawText);
   const encoder = new TextEncoder();
   const data = encoder.encode(cleanText);
-  const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hexString = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return `0x${hexString}`;
+  const cryptoObj = typeof crypto !== 'undefined' ? crypto : (typeof window !== 'undefined' ? window.crypto : null);
+  if (cryptoObj && cryptoObj.subtle) {
+    const hashBuffer = await cryptoObj.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hexString = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return `0x${hexString}`;
+  }
+  return calculateKeccak256(cleanText);
 }
 
 /**
  * Gera um ID de transação realista de 32 bytes (64 caracteres hex)
  */
 export function generateSimulatedTxHash(): string {
-  const randomBytes = new Uint8Array(32);
-  window.crypto.getRandomValues(randomBytes);
-  return '0x' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const cryptoObj = typeof crypto !== 'undefined' ? crypto : (typeof window !== 'undefined' ? window.crypto : null);
+  if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+    const randomBytes = new Uint8Array(32);
+    cryptoObj.getRandomValues(randomBytes);
+    return '0x' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let hex = '';
+  for (let i = 0; i < 64; i++) {
+    hex += Math.floor(Math.random() * 16).toString(16);
+  }
+  return '0x' + hex;
 }
 
 /**

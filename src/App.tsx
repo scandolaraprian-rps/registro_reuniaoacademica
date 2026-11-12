@@ -39,7 +39,7 @@ import {
   BlockchainTransactionError 
 } from './utils/blockchainConnector';
 import { travarInterface } from './utils/web3Lockdown';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Activity, Mail } from 'lucide-react';
 
 import { Navbar } from './components/Navbar';
 import { MeetingForm } from './components/MeetingForm';
@@ -49,6 +49,8 @@ import { MultisigModal } from './components/MultisigModal';
 import { SmartContractViewer } from './components/SmartContractViewer';
 import { AuditVerifier } from './components/AuditVerifier';
 import { ReceiptsHistory } from './components/ReceiptsHistory';
+import { TTFABenchmarkModal } from './components/TTFABenchmarkModal';
+import { MagicLinkResponseModal } from './components/MagicLinkResponseModal';
 
 const LOCAL_STORAGE_RECEIPTS_KEY = 'academic_blockchain_receipts_v1';
 const LOCAL_STORAGE_CONTRACT_KEY = 'academic_blockchain_custom_contract';
@@ -152,6 +154,8 @@ export default function App() {
   });
   const [isMultisigModalOpen, setIsMultisigModalOpen] = useState<boolean>(false);
   const [isConsolidatingProposal, setIsConsolidatingProposal] = useState<boolean>(false);
+  const [isTTFAModalOpen, setIsTTFAModalOpen] = useState<boolean>(false);
+  const [isMagicLinkModalOpen, setIsMagicLinkModalOpen] = useState<boolean>(false);
 
   // Monitoramento e Tratamento de Falhas na Blockchain (Eliminando Falhas Silenciosas)
   const [blockchainError, setBlockchainError] = useState<{
@@ -492,6 +496,7 @@ export default function App() {
         receiptCount={receipts.length}
         institutionalUser={institutionalUser}
         onLogoutInstitutional={handleLogoutInstitutional}
+        onOpenTTFABenchmark={() => setIsTTFAModalOpen(true)}
       />
 
       {/* Main Content Area - padded for mobile bottom dock */}
@@ -637,6 +642,18 @@ export default function App() {
         isConsolidating={isConsolidatingProposal}
       />
 
+      {/* Modal do Benchmark e Auditoria TTFA (Tempo de Fechamento de Ata) */}
+      <TTFABenchmarkModal
+        isOpen={isTTFAModalOpen}
+        onClose={() => setIsTTFAModalOpen(false)}
+      />
+
+      {/* Modal de Auditoria do Tempo de Resposta e Atrito do Magic Link */}
+      <MagicLinkResponseModal
+        isOpen={isMagicLinkModalOpen}
+        onClose={() => setIsMagicLinkModalOpen(false)}
+      />
+
       {/* Institutional Footer */}
       <footer className="bg-[#F2EDE4] border-t border-[#DED8CD] py-6 text-center text-xs text-[#8C8579] print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -646,6 +663,22 @@ export default function App() {
             <span>Regra de Ouro: Gás Mínimo (~45k) com Hashing Bytes32</span>
           </div>
           <div className="flex items-center gap-3 text-[#8C8579]">
+            <button
+              onClick={() => setIsMagicLinkModalOpen(true)}
+              className="text-[#4A6741] hover:underline font-semibold text-[11px] flex items-center gap-1 cursor-pointer"
+            >
+              <Mail className="w-3 h-3" />
+              <span>Tempo Magic Link (Atrito & SLA)</span>
+            </button>
+            <span>&middot;</span>
+            <button
+              onClick={() => setIsTTFAModalOpen(true)}
+              className="text-[#4A6741] hover:underline font-semibold text-[11px] flex items-center gap-1 cursor-pointer"
+            >
+              <Activity className="w-3 h-3" />
+              <span>Auditoria TTFA (SLA Benchmark)</span>
+            </button>
+            <span>&middot;</span>
             <span>Redes: Ethereum Sepolia / Polygon Amoy</span>
             <span>&middot;</span>
             <button

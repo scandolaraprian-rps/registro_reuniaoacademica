@@ -26,11 +26,20 @@ import { AcademicMeetingData } from '../types';
  * 
  * @param {AcademicMeetingData | Record<string, any>} dadosAta Dados consolidados da ata
  */
-export function travarInterface(dadosAta?: AcademicMeetingData | Record<string, any>): void {
+export function travarInterface(
+  dadosAta?: AcademicMeetingData | Record<string, any>,
+  targetDocument?: Document
+): void {
   console.info('[DOM Lockdown] Iniciando travamento absoluto da interface por aprovação on-chain...');
 
+  const doc = targetDocument ?? (typeof document !== 'undefined' ? document : undefined);
+  if (!doc) {
+    console.warn('[DOM Lockdown] Documento DOM indisponível para travamento.');
+    return;
+  }
+
   // Localiza o formulário da ata ou container principal
-  const formulario = document.getElementById('meeting-form') || document.querySelector('form');
+  const formulario = doc.getElementById('meeting-form') || doc.querySelector('form');
   if (!formulario) {
     console.warn('[DOM Lockdown] Elemento de formulário não encontrado para travamento.');
     return;
@@ -47,11 +56,11 @@ export function travarInterface(dadosAta?: AcademicMeetingData | Record<string, 
     const idOriginal = textarea.id;
 
     // Cria contêiner semântico estático <div> com <p> interno
-    const blocoEstatico = document.createElement('div');
+    const blocoEstatico = doc.createElement('div');
     blocoEstatico.id = idOriginal ? `${idOriginal}-imutavel` : '';
     blocoEstatico.className = 'w-full bg-[#FAF9F6] border border-[#DED8CD] rounded-lg px-4 py-3 text-sm text-[#2D2A26] leading-relaxed shadow-2xs font-sans whitespace-pre-wrap select-text';
 
-    const paragrafoTexto = document.createElement('p');
+    const paragrafoTexto = doc.createElement('p');
     paragrafoTexto.className = 'text-[#2D2A26] m-0 font-normal';
     paragrafoTexto.textContent = valorConsolidado;
 
@@ -70,7 +79,7 @@ export function travarInterface(dadosAta?: AcademicMeetingData | Record<string, 
     // Caso A: Checkboxes (Participantes, Ações regimentais)
     if (tipo === 'checkbox') {
       const estaMarcado = input.checked;
-      const spanBadge = document.createElement('span');
+      const spanBadge = doc.createElement('span');
       spanBadge.id = idOriginal ? `${idOriginal}-imutavel` : '';
       spanBadge.className = estaMarcado
         ? 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs'
@@ -83,11 +92,11 @@ export function travarInterface(dadosAta?: AcademicMeetingData | Record<string, 
 
     // Caso B: Inputs de texto, data, número
     const valorConsolidado = input.value || (dadosAta as any)?.[input.name] || '';
-    const divEstatica = document.createElement('div');
+    const divEstatica = doc.createElement('div');
     divEstatica.id = idOriginal ? `${idOriginal}-imutavel` : '';
     divEstatica.className = 'w-full bg-[#FAF9F6] border border-[#DED8CD] rounded-lg px-4 py-2.5 text-sm font-semibold text-[#2D2A26] shadow-2xs select-text';
 
-    const spanTexto = document.createElement('span');
+    const spanTexto = doc.createElement('span');
     spanTexto.textContent = valorConsolidado || '—';
     divEstatica.appendChild(spanTexto);
 
@@ -101,8 +110,8 @@ export function travarInterface(dadosAta?: AcademicMeetingData | Record<string, 
 
   // 4. Injeta Banner Semântico de Imutabilidade e Proteção da Parte Vulnerável
   const idBanner = 'banner-imutabilidade-blockchain';
-  if (!document.getElementById(idBanner)) {
-    const banner = document.createElement('aside');
+  if (!doc.getElementById(idBanner)) {
+    const banner = doc.createElement('aside');
     banner.id = idBanner;
     banner.setAttribute('role', 'alert');
     banner.className = 'p-4 mb-6 rounded-xl bg-emerald-950 text-white border-2 border-emerald-500 shadow-md flex items-center justify-between gap-4 animate-in fade-in duration-300';

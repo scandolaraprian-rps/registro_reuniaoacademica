@@ -11,7 +11,8 @@ import {
   RefreshCw,
   CheckCircle2,
   LogOut,
-  UserCheck
+  UserCheck,
+  Activity
 } from 'lucide-react';
 import { WalletState, BlockchainNetwork, InstitutionalUser } from '../types';
 import { SUPPORTED_NETWORKS } from '../contracts/solidityContract';
@@ -29,6 +30,7 @@ interface NavbarProps {
   receiptCount: number;
   institutionalUser?: InstitutionalUser | null;
   onLogoutInstitutional?: () => void;
+  onOpenTTFABenchmark?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -41,7 +43,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSimulatedWallet,
   receiptCount,
   institutionalUser,
-  onLogoutInstitutional
+  onLogoutInstitutional,
+  onOpenTTFABenchmark
 }) => {
   const [networkDropdownOpen, setNetworkDropdownOpen] = useState(false);
   const [walletDropdownOpen, setWalletDropdownOpen] = useState(false);
@@ -129,6 +132,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Code2 className={`w-3.5 h-3.5 ${activeTab === 'contract' ? 'text-[#4A6741]' : 'text-[#8C8579]'}`} />
                 Smart Contract
               </button>
+
+              {onOpenTTFABenchmark && (
+                <button
+                  id="nav-btn-ttfa"
+                  type="button"
+                  onClick={onOpenTTFABenchmark}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold text-[#8C8579] hover:text-[#4A6741] hover:bg-white/60 transition-colors cursor-pointer border border-transparent hover:border-[#DED8CD]"
+                  title="Auditoria de Desempenho e Tempo de Fechamento de Ata (TTFA Benchmark)"
+                >
+                  <Activity className="w-3.5 h-3.5 text-[#4A6741]" />
+                  <span className="hidden xl:inline">Auditoria</span> TTFA
+                </button>
+              )}
             </nav>
 
             {/* Network Selector & Wallet Button */}
@@ -361,6 +377,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Code2 className="w-5 h-5 mb-0.5" />
           <span className="text-[10px] leading-tight">Contrato</span>
         </button>
+
+        {onOpenTTFABenchmark && (
+          <button
+            id="mobile-nav-ttfa"
+            type="button"
+            onClick={onOpenTTFABenchmark}
+            className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl min-w-[56px] min-h-[48px] text-[#8C8579] hover:text-[#4A6741] transition-all cursor-pointer"
+            title="Benchmark TTFA"
+          >
+            <Activity className="w-5 h-5 mb-0.5 text-[#4A6741]" />
+            <span className="text-[10px] leading-tight font-medium">TTFA</span>
+          </button>
+        )}
 
         {institutionalUser && onLogoutInstitutional && (
           <button

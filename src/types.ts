@@ -148,3 +148,68 @@ export interface WalletState {
   balance: string;
   isSimulated: boolean;
 }
+
+export interface TTFAPhaseBreakdown {
+  sanitizationMs: number;      // T1: higienização, validação de densidade, serialização e hash Keccak-256
+  multisigMs: number;          // T2: criação de proposta, links mágicos e coleta de assinaturas dos signatários
+  blockchainMs: number;        // T3: transmissão, mempool e confirmação no bloco on-chain
+  domRenderMs: number;         // T4: compilação do recibo e renderização / verificação no DOM
+  totalClosingTimeMs: number;  // TTFA = t_end - t_start (ou soma de sub-etapas)
+}
+
+export interface TTFAMeasurement {
+  runId: string;
+  iteration: number;
+  cohortId: string;
+  cohortName: string;
+  tStart: number;
+  tEnd: number;
+  phases: TTFAPhaseBreakdown;
+  txId: string;
+  blockNumber: number;
+  success: boolean;
+  domVerified: boolean;
+  signerCount: number;
+}
+
+export interface TTFACohortConfig {
+  id: string;
+  name: string;
+  description: string;
+  runs: number;
+  signerDelaysMs: number[] | ((signerIndex: number) => number);
+  slaThresholdMs: number;
+}
+
+export interface TTFAStatistics {
+  count: number;
+  mean: number;
+  median: number;
+  stdDev: number;
+  min: number;
+  max: number;
+  p95: number;
+  meanPhases: {
+    sanitizationMs: number;
+    multisigMs: number;
+    blockchainMs: number;
+    domRenderMs: number;
+  };
+  slaLimit: number;
+  slaPass: boolean;
+}
+
+export interface TTFACohortResult {
+  cohort: TTFACohortConfig;
+  measurements: TTFAMeasurement[];
+  stats: TTFAStatistics;
+}
+
+export interface TTFASuiteSummary {
+  timestamp: number;
+  totalRuns: number;
+  cohortResults: TTFACohortResult[];
+  globalStats: TTFAStatistics;
+  systemControlStatus: 'CONFORME' | 'NAO_CONFORME';
+}
+
