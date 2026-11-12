@@ -134,8 +134,10 @@ export function solicitarMagicLink(email: string): MagicLinkDispatchResult {
   });
 
   // 4. Monta a URL simulada do Magic Link
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://academic-ledger.edu.br';
-  const urlSimulada = `${baseUrl}/login/magic?token=${token}&email=${encodeURIComponent(emailSanitizado)}`;
+  const baseUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}`
+    : 'https://academic-ledger.edu.br';
+  const urlSimulada = `${baseUrl}/?route=login/magic&token=${token}&email=${encodeURIComponent(emailSanitizado)}`;
 
   // Atualiza status para ENVIADO
   registroToken.status = 'ENVIADO';

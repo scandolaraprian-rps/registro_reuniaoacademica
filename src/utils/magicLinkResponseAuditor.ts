@@ -232,8 +232,10 @@ export class MockMessagingService {
     const tDispatch = performance.now();
     const timestampIso = new Date().toISOString();
 
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://academic-ledger.edu.br';
-    const magicLinkUrl = `${baseUrl}/multisig/attest?proposal=${proposalId}&partId=${params.signer.id}&token=${token}&hash=${docHash}`;
+    const baseUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}`
+      : 'https://academic-ledger.edu.br';
+    const magicLinkUrl = `${baseUrl}/?route=multisig/attest&proposal=${proposalId}&partId=${params.signer.id}&token=${token}&hash=${docHash}`;
 
     const dispatchEvent: MagicLinkDispatchEvent = {
       dispatchId: `disp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,

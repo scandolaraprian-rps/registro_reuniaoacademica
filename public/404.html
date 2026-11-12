@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Redirecionando...</title>
+    <script>
+      (function () {
+        var loc = window.location;
+        var segments = loc.pathname.split('/').filter(Boolean);
+        // Preserva o primeiro segmento (nome do repositório no GitHub Pages) quando não está em domínio raiz
+        var isGithubIo = loc.hostname.endsWith('github.io');
+        var basePath = isGithubIo && segments.length > 0 ? '/' + segments[0] + '/' : '/';
+        loc.replace(loc.origin + basePath + loc.search + loc.hash);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

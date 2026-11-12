@@ -8,10 +8,10 @@ import { Image as ImageIcon } from 'lucide-react';
  * Para substituir a imagem do logotipo:
  * 1. Coloque seu arquivo de imagem na pasta /public (ex: /public/meu-logo.png)
  * 2. Atualize a constante DEFAULT_LOGO_SRC abaixo com o caminho do arquivo:
- *    Exemplo: export const DEFAULT_LOGO_SRC = '/meu-logo.png';
+ *    Exemplo: export const DEFAULT_LOGO_SRC = './meu-logo.png';
  * =======================================================================
  */
-export const DEFAULT_LOGO_SRC = '/imagem_logo.png';
+export const DEFAULT_LOGO_SRC = './imagem_logo.png';
 
 interface LogoPlaceholderProps {
   className?: string;

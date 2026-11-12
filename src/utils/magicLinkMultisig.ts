@@ -115,8 +115,10 @@ export function criarPropostaMultisig(params: {
       used: false
     });
 
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://academic-ledger.edu.br';
-    const magicLinkUrl = `${baseUrl}/multisig/attest?proposal=${proposalId}&partId=${part.id}&token=${token}&hash=${params.documentHash}`;
+    const baseUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}`
+      : 'https://academic-ledger.edu.br';
+    const magicLinkUrl = `${baseUrl}/?route=multisig/attest&proposal=${proposalId}&partId=${part.id}&token=${token}&hash=${params.documentHash}`;
 
     // O proponente (se for o primeiro da lista ou corresponder ao email) assina inicialmente
     const isProposer = index === 0;

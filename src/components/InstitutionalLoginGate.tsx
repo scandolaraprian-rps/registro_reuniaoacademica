@@ -135,7 +135,8 @@ export const InstitutionalLoginGate: React.FC<InstitutionalLoginGateProps> = ({
     if (!dispatchResult?.token) return;
     console.warn('[AppSec Test] Simulando ultrapassagem da janela de 10 minutos...');
     // Forja a URL com token inexistente/expirado
-    const urlExpirada = `${window.location.origin}/login/magic?token=tok_expirado_${Date.now()}`;
+    const baseUrl = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}`;
+    const urlExpirada = `${baseUrl}/?route=login/magic&token=tok_expirado_${Date.now()}`;
     handleClicarMagicLink(urlExpirada);
   };
 
